@@ -1,0 +1,52 @@
+package repository
+
+import "github.com/akawula/DoraMatic/view/layout"
+import "github.com/akawula/DoraMatic/github/repositories"
+import "fmt"
+
+templ Show(repos []repositories.Repository) {
+	@layout.Base() {
+		@List(1, repos)
+	}
+}
+
+templ List(page int, repos []repositories.Repository) {
+	<div id="repo-list" class="overflow-x-auto">
+		<table class="table table-zebra">
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Owner</th>
+					<th>Primary Language</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, repo := range repos {
+					<tr>
+						<td>{ string(repo.Name) }</td>
+						<td>{ string(repo.Owner.Login) }</td>
+						<td>{ string(repo.PrimaryLanguage.Name) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		<div class="join w-128 flex items-center justify-center mt-10">
+			<button
+				if page==1 {
+					disabled
+				}
+				hx-get={ fmt.Sprintf("/repository/list/%d", page-1) }
+				hx-target="#repo-list"
+				hx-swap="outerHTML"
+				class="join-item btn btn-outline w-64"
+			>Previous page</button>
+			<button
+				hx-get={ fmt.Sprintf("/repository/list/%d", page+1) }
+				hx-get="/repository/list/2"
+				hx-target="#repo-list"
+				hx-swap="outerHTML"
+				class="join-item btn btn-outline w-64"
+			>Next</button>
+		</div>
+	</div>
+}
