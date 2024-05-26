@@ -15,12 +15,12 @@ type RepositoryHandler struct {
 }
 
 func (h RepositoryHandler) Show(c echo.Context) error {
-	repos, err := h.DB.GetRepos(1)
+	repos, total, err := h.DB.GetRepos(1, c.QueryParam("search"))
 	if err != nil {
 		h.Logger.Info("There was an error while getting Repos", "error", err)
 		return err
 	}
-	return render(c, Repository.Show(repos))
+	return render(c, Repository.Show(total, repos))
 }
 
 func (h RepositoryHandler) List(c echo.Context) error {
@@ -28,11 +28,11 @@ func (h RepositoryHandler) List(c echo.Context) error {
 	if err != nil {
 		page = 1 // screw errors, it needs to be an int (period)
 	}
-	repos, err := h.DB.GetRepos(page)
+	repos, total, err := h.DB.GetRepos(page, c.QueryParam("search"))
 	if err != nil {
 		h.Logger.Info("There was an error while getting Repos", "error", err)
 		return err
 	}
 
-	return render(c, Repository.List(page, repos))
+	return render(c, Repository.List(page, total, repos))
 }

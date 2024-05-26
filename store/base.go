@@ -6,5 +6,5 @@ import (
 
 type Store interface {
 	Close()
-	GetRepos(page int) ([]repositories.Repository, error)
+	GetRepos(page int, search string) ([]repositories.Repository, int, error)
 }

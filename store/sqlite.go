@@ -34,16 +34,26 @@ func (s *SQLiteDB) Close() {
 	s.DB.Close()
 }
 
-func (s *SQLiteDB) GetRepos(page int) ([]repositories.Repository, error) {
+func (s *SQLiteDB) getTotal(q string) int {
+	r := s.DB.QueryRow(q)
+	var t int
+	r.Scan(&t)
+
+	return t
+}
+
+func (s *SQLiteDB) GetRepos(page int, search string) ([]repositories.Repository, int, error) {
 	limit := 20 // TODO: someday make it a param from echo, so customer can choose how many rows to show at once
 	offset := calculateOffset(page, limit)
+	query, queryTotal := getQueryRepos(search)
+	lo := fmt.Sprintf(` LIMIT %d OFFSET %d`, limit, offset)
+	s.Logger.Debug("Executing SQLite3 query", "query", query+lo)
 
-	query := fmt.Sprintf(`SELECT * FROM repositories ORDER by slug, org LIMIT %d OFFSET %d`, limit, offset)
-	s.Logger.Debug("Executing SQLite3 query", "query", query)
+	total := s.getTotal(queryTotal)
 
-	rows, err := s.DB.Query(query)
+	rows, err := s.DB.Query(query + lo)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -52,12 +62,23 @@ func (s *SQLiteDB) GetRepos(page int) ([]repositories.Repository, error) {
 		var repo repositories.Repository
 
 		if err := rows.Scan(&repo.Owner.Login, &repo.Name, &repo.PrimaryLanguage.Name); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		results = append(results, repo)
 	}
 
-	return results, nil
+	return results, total, nil
+}
+
+func getQueryRepos(search string) (string, string) {
+	s := `SELECT * `
+	c := `SELECT count(*) `
+	q := `FROM repositories ORDER by slug, org`
+	if len(search) > 0 {
+		q = fmt.Sprintf(`FROM repositories WHERE slug LIKE "%%%s%%" ORDER by slug, org`, search)
+	}
+
+	return s + q, c + q
 }
 
 func calculateOffset(page, limit int) (offset int) {
