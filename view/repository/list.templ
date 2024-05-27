@@ -50,7 +50,8 @@ templ List(page int, total int, repos []repositories.Repository) {
   <div class="join w-128 flex items-center justify-center mt-10">
     <button if page==1 { disabled } hx-vals="js:{search: document.getElementById('search').value}" hx-get={
       fmt.Sprintf("/repository/list/%d", page-1) } hx-target="#repo-list" hx-swap="outerHTML"
-      class="join-item btn btn-outline w-64">Previous page</button>
+      class="join-item btn">«</button>
+    <button class="join-item btn">Page { fmt.Sprintf("%d", page) }</button>
     <button if page * 20>= total {
       disabled
       }
@@ -60,8 +61,8 @@ templ List(page int, total int, repos []repositories.Repository) {
       hx-get="/repository/list/2"
       hx-target="#repo-list"
       hx-swap="outerHTML"
-      class="join-item btn btn-outline w-64"
-      >Next</button>
+      class="join-item btn"
+      >»</button>
   </div>
   }
 </div>
