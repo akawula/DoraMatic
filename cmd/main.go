@@ -33,6 +33,7 @@ func setupRepositories(app *echo.Echo, db store.Store, logger *slog.Logger) {
 	repositoryHandler := handler.RepositoryHandler{Logger: logger, DB: db}
 	app.GET("/repository/list", repositoryHandler.Show)
 	app.GET("/repository/list/:page", repositoryHandler.List)
+	app.GET("/repository/list/refresh", repositoryHandler.Refresh)
 }
 
 func setupHandlers(app *echo.Echo, db store.Store, l *slog.Logger) {
@@ -47,7 +48,6 @@ func main() {
 	defer db.Close()
 
 	setupHandlers(app, db, l)
-
 	if err := app.Start(":2137"); err != nil {
 		l.Error("There was an error while starting app", "error", err)
 	}

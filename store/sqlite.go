@@ -42,6 +42,17 @@ func (s *SQLiteDB) getTotal(q string) int {
 	return t
 }
 
+func (s *SQLiteDB) SaveRepos(repos []repositories.Repository) (err error) {
+	for _, repo := range repos {
+		_, err = s.DB.Exec(fmt.Sprintf("INSERT OR IGNORE INTO repositories (org, slug, \"language\") VALUES (\"%s\", \"%s\", \"%s\")", repo.Owner.Login, repo.Name, repo.PrimaryLanguage.Name))
+		if err != nil {
+			return err
+		}
+	}
+
+	return
+}
+
 func (s *SQLiteDB) GetRepos(page int, search string) ([]repositories.Repository, int, error) {
 	limit := 20 // TODO: someday make it a param from echo, so customer can choose how many rows to show at once
 	offset := calculateOffset(page, limit)
