@@ -1,4 +1,6 @@
 BINARY_NAME=app
+APP_NAME=doramatic
+DOCKER_IMAGE=andrewkawula/${APP_NAME}:latest
 
 default: run
 
@@ -25,3 +27,9 @@ test:
 
 test_coverage:
 	go test ./... -coverprofile=coverage.out
+
+deploy: clean generate build-pi 
+	kubectl rollout restart deployment/${APP_NAME}
+
+build-pi:
+	docker-buildx build -t ${DOCKER_IMAGE} --platform=linux/arm64 . && docker push ${DOCKER_IMAGE}

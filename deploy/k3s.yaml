@@ -1,0 +1,38 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: doramatic
+spec:
+  replicas: 2
+  #number of replicas generated
+  selector:
+    #assigns labels to the pods for future selection
+    matchLabels:
+      app: doramatic
+  template:
+    metadata:
+      labels:
+        app: doramatic
+    spec:
+      containers:
+      - name: doramatic
+        image: andrewkawula/doramatic:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 2137
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: doramatic
+  labels:
+    app: doramatic
+spec:
+  type: NodePort
+  ports:
+  - port: 2137
+    targetPort: 2137
+    nodePort: 30000
+    protocol: TCP
+  selector:
+    app: doramatic
