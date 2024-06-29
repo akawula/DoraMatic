@@ -44,7 +44,7 @@ func setupHandlers(app *echo.Echo, db store.Store, l *slog.Logger) {
 func main() {
 	l := logger()
 	app := echo.New()
-	db := store.New(l)
+	db := store.NewPostgres(l)
 	defer db.Close()
 
 	setupHandlers(app, db, l)

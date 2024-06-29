@@ -11,10 +11,10 @@ import "io"
 import "bytes"
 
 import "github.com/akawula/DoraMatic/view/layout"
-import "github.com/akawula/DoraMatic/github/repositories"
 import "fmt"
+import "github.com/akawula/DoraMatic/store"
 
-func Show(total int, repos []repositories.Repository) templ.Component {
+func Show(total int, repos []store.DBRepository) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
 		if !templ_7745c5c3_IsBuffer {
@@ -93,7 +93,7 @@ func Options() templ.Component {
 	})
 }
 
-func List(page int, total int, repos []repositories.Repository) templ.Component {
+func List(page int, total int, repos []store.DBRepository) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
 		if !templ_7745c5c3_IsBuffer {
@@ -116,9 +116,9 @@ func List(page int, total int, repos []repositories.Repository) templ.Component 
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
-			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(string(repo.Name))
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(string(repo.Org))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 53, Col: 29}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 43, Col: 30}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -129,9 +129,9 @@ func List(page int, total int, repos []repositories.Repository) templ.Component 
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var6 string
-			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(string(repo.Owner.Login))
+			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(string(repo.Slug))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 54, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 44, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -142,9 +142,9 @@ func List(page int, total int, repos []repositories.Repository) templ.Component 
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var7 string
-			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(string(repo.PrimaryLanguage.Name))
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(string(repo.Language))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 55, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 45, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -175,9 +175,10 @@ func List(page int, total int, repos []repositories.Repository) templ.Component 
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var8 string
-			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/repository/list/%d", page-1))
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(
+				fmt.Sprintf("/repository/list/%d", page-1))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 67, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 53, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -190,7 +191,7 @@ func List(page int, total int, repos []repositories.Repository) templ.Component 
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", page))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 72, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 55, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 			if templ_7745c5c3_Err != nil {
@@ -214,7 +215,7 @@ func List(page int, total int, repos []repositories.Repository) templ.Component 
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/repository/list/%d",
 				page+1))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 79, Col: 13}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/repository/list.templ`, Line: 61, Col: 13}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {

@@ -20,7 +20,23 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 2137
+        env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-token
+              key: GITHUB_TOKEN
+        - name: POSTGRES_DB
+          value: doramatic 
+        - name: POSTGRES_USER
+          value: doramatic
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-password
+              key: POSTGRES_PASSWORD
 ---
+
 apiVersion: v1
 kind: Service
 metadata:
@@ -36,3 +52,70 @@ spec:
     protocol: TCP
   selector:
     app: doramatic
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app: postgres
+  type: LoadBalancer
+  ports:
+    - name: postgres-port
+      protocol: TCP
+      port: 5432
+      targetPort: 5432
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    #assigns labels to the pods for future selection
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:latest # it's local development, we don't need to lock ourself to specific version 
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: doramatic 
+            - name: POSTGRES_USER
+              value: doramatic
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-password
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - mountPath: "/var/lib/postgresql/data"
+              name: "postgres-storage"
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc

@@ -5,12 +5,12 @@ DOCKER_IMAGE=andrewkawula/${APP_NAME}:latest
 default: run
 
 build:
-	CGO_ENABLED=1 GOARCH=amd64 GOOS=darwin go build -o app/${BINARY_NAME} cmd/main.go
+	GOARCH=amd64 GOOS=darwin go build -o app/${BINARY_NAME} cmd/main.go
 
 generate:
 	templ generate
 
-run: clean generate build copy-database
+run: clean generate build
 	DEBUG=1 ./app/${BINARY_NAME}
 
 air:
@@ -18,9 +18,6 @@ air:
 
 clean: 
 	rm -rf ./app
-
-copy-database:
-		cp ./database.db ./app/
 
 test:
 	go test ./...
