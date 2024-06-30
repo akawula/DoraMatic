@@ -1,7 +1,6 @@
 package layout
 
 import "strings"
-import "log/slog"
 import "golang.org/x/text/cases"
 import "golang.org/x/text/language"
 
@@ -141,7 +140,6 @@ func makeHeader(p string) string {
 		return "Dashboard"
 	}
 
-	x := strings.Split(p, "/")
-	slog.Info("testing", "p", p, "x", x, "len", len(x))
-	return cases.Title(language.English, cases.Compact).String(strings.Join(x, " "))
+	x := strings.Join(strings.Split(p, "/"), " ")
+	return cases.Title(language.English, cases.Compact).String(x)
 }

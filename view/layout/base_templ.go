@@ -11,7 +11,6 @@ import "io"
 import "bytes"
 
 import "strings"
-import "log/slog"
 import "golang.org/x/text/cases"
 import "golang.org/x/text/language"
 
@@ -35,7 +34,7 @@ func Base() templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(makeHeader(ctx.Value("activeUrl").(string)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout/base.templ`, Line: 65, Col: 85}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout/base.templ`, Line: 64, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -106,7 +105,7 @@ func menuItem(activePath string, path, name string) templ.Component {
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout/base.templ`, Line: 133, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout/base.templ`, Line: 132, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -133,7 +132,7 @@ func menuItem(activePath string, path, name string) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout/base.templ`, Line: 135, Col: 40}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout/base.templ`, Line: 134, Col: 40}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -156,7 +155,6 @@ func makeHeader(p string) string {
 		return "Dashboard"
 	}
 
-	x := strings.Split(p, "/")
-	slog.Info("testing", "p", p, "x", x, "len", len(x))
-	return cases.Title(language.English, cases.Compact).String(strings.Join(x, " "))
+	x := strings.Join(strings.Split(p, "/"), " ")
+	return cases.Title(language.English, cases.Compact).String(x)
 }
