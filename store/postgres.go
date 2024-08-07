@@ -76,7 +76,7 @@ func (p *Postgres) SaveRepos(repos []repositories.Repository) error {
 	}
 
 	_, err := p.db.NamedExec(`INSERT INTO repositories (org, slug, language)
-    VALUES (:org, :slug, :language)`, batchUpdate)
+    VALUES (:org, :slug, :language) ON CONFLICT (org, slug) DO NOTHING`, batchUpdate)
 	if err != nil {
 		p.Logger.Error("can't insert new repository", "error", err)
 		return err
