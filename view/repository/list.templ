@@ -40,8 +40,8 @@ templ List(page int, total int, repos []store.DBRepository) {
     <tbody>
       for _, repo := range repos {
       <tr>
-        <td>{ string(repo.Org) }</td>
         <td>{ string(repo.Slug) }</td>
+        <td>{ string(repo.Org) }</td>
         <td>{ string(repo.Language) }</td>
       </tr>
       }
