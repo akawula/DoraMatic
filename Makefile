@@ -5,7 +5,7 @@ DOCKER_IMAGE=andrewkawula/${APP_NAME}:latest
 default: run
 
 build:
-	GOARCH=amd64 GOOS=darwin go build -o app/${BINARY_NAME} cmd/main.go
+	GOARCH=amd64 GOOS=darwin go build -o app/${BINARY_NAME} cmd/app/main.go
 
 generate:
 	templ generate
