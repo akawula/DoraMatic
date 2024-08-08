@@ -41,7 +41,7 @@ func (h RepositoryHandler) List(c echo.Context) error {
 }
 
 func (h RepositoryHandler) Refresh(c echo.Context) error {
-	r, err := repositories.GetRepositories()
+	r, err := repositories.Get()
 	if err != nil {
 		h.Logger.Error("there was an error while fetching repos", "error", err)
 	}
