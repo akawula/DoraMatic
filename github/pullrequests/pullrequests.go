@@ -2,6 +2,8 @@ package pullrequests
 
 import (
 	"context"
+	"log/slog"
+	"time"
 
 	"github.com/akawula/DoraMatic/github/client"
 	"github.com/akawula/DoraMatic/github/repositories"
@@ -43,35 +45,49 @@ type PullRequest struct {
 	} `graphql:"timelineItems(itemTypes: REVIEW_REQUESTED_EVENT, first: 1)"`
 }
 
-func Get(org string, repo string) ([]PullRequest, error) {
+func Get(org string, repo string, lastDBDate time.Time, logger *slog.Logger) ([]PullRequest, error) {
 	var q struct {
-		Organization struct {
-			Repository struct {
-				PullRequests struct {
-					Nodes    []PullRequest
-					PageInfo struct {
-						HasNextPage githubv4.Boolean
-						EndCursor   githubv4.String
-					}
-				} `graphql:"pullRequests(first:50, orderBy: {field: CREATED_AT, direction: DESC}, states: [MERGED], after: $after)"`
-			} `graphql:"repository(name: $name)"`
-		} `graphql:"organization(login: $login)"`
+		Repository struct {
+			PullRequests struct {
+				Nodes    []PullRequest
+				PageInfo struct {
+					HasNextPage githubv4.Boolean
+					EndCursor   githubv4.String
+				}
+			} `graphql:"pullRequests(first:50, orderBy: {field: CREATED_AT, direction: DESC}, states: [MERGED], after: $after)"`
+		} `graphql:"repository(name: $name, owner: $login)"`
 	}
 
 	client := client.Get()
 	variables := map[string]interface{}{"login": githubv4.String(org), "name": githubv4.String(repo), "after": (*githubv4.String)(nil)}
+	logger.Debug("Will do the pull reuqest query with params", "variables", variables)
 	results := []PullRequest{}
+	retries := 3
 	for {
 		err := client.Query(context.Background(), &q, variables)
 		if err != nil {
+			if retries > 0 {
+				logger.Debug("Retrying fetching pull requests", "org", org, "repo", repo, "retries", retries, "error", err)
+				retries--
+				continue
+			}
 			return nil, err
 		}
-		results = append(results, q.Organization.Repository.PullRequests.Nodes...)
-		if !q.Organization.Repository.PullRequests.PageInfo.HasNextPage {
+		results = append(results, q.Repository.PullRequests.Nodes...)
+		if older := len(results) > 0 && checkDates(lastDBDate, results[len(results)-1].CreatedAt); older || !bool(q.Repository.PullRequests.PageInfo.HasNextPage) {
 			break
 		}
-		variables["after"] = githubv4.String(q.Organization.Repository.PullRequests.PageInfo.EndCursor)
+		variables["after"] = githubv4.String(q.Repository.PullRequests.PageInfo.EndCursor)
 	}
 
 	return results, nil
+}
+
+func checkDates(lastDbDate time.Time, ghDate githubv4.String) bool {
+	r, err := time.Parse(time.RFC3339, string(ghDate))
+	if err != nil {
+		slog.Error("Parse error", "error", err)
+	}
+
+	return r.Before(lastDbDate)
 }

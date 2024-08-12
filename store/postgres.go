@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
+	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -82,4 +84,93 @@ func (p *Postgres) SaveRepos(repos []repositories.Repository) error {
 		return err
 	}
 	return nil
+}
+
+func (p *Postgres) GetLastPRDate(org string, repo string) (t time.Time) {
+	t = time.Now().AddDate(-2, 0, 0) // -2 years
+	w := map[string]interface{}{"org": org, "repo": repo}
+	rows, err := p.db.NamedQuery("SELECT merged_at FROM prs WHERE repository_owner = :org AND repository_name = :repo ORDER BY merged_at DESC LIMIT 1", w)
+	if err != nil {
+		p.Logger.Error("Can't feetch last date of pr", "error", err, "repo", repo, "org", org)
+		return
+	}
+
+	for rows.Next() {
+		err := rows.Scan(&t)
+		if err != nil {
+			p.Logger.Error("there was an error while scanning rows for last date", "error", err, "org", org, "repo", repo)
+			return
+		}
+	}
+
+	return
+}
+
+func (p *Postgres) SavePullRequest(prs []pullrequests.PullRequest) (err error) {
+	if len(prs) == 0 {
+		p.Logger.Info("Pull Requests slice is empty, going next...")
+		return
+	}
+
+	batchUpdate := []map[string]interface{}{}
+	for _, pr := range prs {
+		batchUpdate = append(batchUpdate, map[string]interface{}{
+			"id":               pr.Id,
+			"title":            pr.Title,
+			"state":            pr.State,
+			"url":              pr.Url,
+			"merged_at":        pr.MergedAt,
+			"created_at":       pr.CreatedAt,
+			"additions":        pr.Additions,
+			"deletions":        pr.Deletions,
+			"branch_name":      pr.HeadRefName,
+			"author":           pr.Author.Login,
+			"repository_name":  pr.Repository.Name,
+			"repository_owner": pr.Repository.Owner.Login,
+		})
+
+		if len(pr.Commits.Nodes) > 0 {
+			err = p.SaveCommits(string(pr.Id), pr.Commits.Nodes)
+		}
+		if err != nil {
+			p.Logger.Error("can't save commits", "pr", pr.Id, "commits", pr.Commits.Nodes)
+		}
+	}
+
+	_, err = p.db.NamedExec(`INSERT INTO prs (id, title, state, url, merged_at, created_at, additions, deletions, branch_name, author, repository_name, repository_owner)
+    VALUES (:id, :title, :state, :url, :merged_at, :created_at, :additions, :deletions, :branch_name, :author, :repository_name, :repository_owner) ON CONFLICT (id) DO NOTHING`, batchUpdate)
+	if err != nil {
+		p.Logger.Error("can't insert new pull request", "error", err)
+		return
+	}
+	return
+}
+
+func (p *Postgres) SaveCommits(pr_id string, commits []pullrequests.Commit) (err error) {
+	batchUpdate := []map[string]interface{}{}
+	for _, commit := range commits {
+		batchUpdate = append(batchUpdate, map[string]interface{}{
+			"id":      string(commit.Id),
+			"pr_id":   pr_id,
+			"message": commit.Commit.Message,
+		})
+	}
+
+	_, err = p.db.NamedExec(`INSERT INTO commits (id, pr_id, message)
+    VALUES (:id, :pr_id, :message) ON CONFLICT (id) DO NOTHING`, batchUpdate)
+	if err != nil {
+		p.Logger.Error("can't insert new commit", "error", err)
+		return
+	}
+	return
+}
+
+func (p *Postgres) GetAllRepos() ([]DBRepository, error) {
+	repos := []DBRepository{}
+	if err := p.db.Select(&repos, "SELECT * FROM repositories"); err != nil {
+		p.Logger.Error("can't fetch repositories", "error", err)
+		return nil, err
+	}
+
+	return repos, nil
 }

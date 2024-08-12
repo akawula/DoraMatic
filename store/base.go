@@ -2,7 +2,9 @@ package store
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
 )
 
@@ -10,6 +12,9 @@ type Store interface {
 	Close()
 	GetRepos(page int, search string) ([]DBRepository, int, error)
 	SaveRepos([]repositories.Repository) error
+	GetLastPRDate(org string, repo string) time.Time
+	SavePullRequest(prs []pullrequests.PullRequest) (err error)
+	GetAllRepos() ([]DBRepository, error)
 }
 
 func getQueryRepos(search string) (string, string) {
