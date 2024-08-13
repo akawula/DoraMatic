@@ -42,6 +42,7 @@ type PullRequest struct {
 				CreatedAt githubv4.String
 			} `graphql:"... on ReviewRequestedEvent"`
 		}
+		TotalCount githubv4.Int
 	} `graphql:"timelineItems(itemTypes: REVIEW_REQUESTED_EVENT, first: 1)"`
 }
 
@@ -54,7 +55,7 @@ func Get(org string, repo string, lastDBDate time.Time, logger *slog.Logger) ([]
 					HasNextPage githubv4.Boolean
 					EndCursor   githubv4.String
 				}
-			} `graphql:"pullRequests(first:50, orderBy: {field: CREATED_AT, direction: DESC}, states: [MERGED], after: $after)"`
+			} `graphql:"pullRequests(first:30, orderBy: {field: CREATED_AT, direction: DESC}, states: [MERGED], after: $after)"`
 		} `graphql:"repository(name: $name, owner: $login)"`
 	}
 

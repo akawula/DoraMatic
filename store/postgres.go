@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"os"
@@ -114,31 +115,41 @@ func (p *Postgres) SavePullRequest(prs []pullrequests.PullRequest) (err error) {
 
 	batchUpdate := []map[string]interface{}{}
 	for _, pr := range prs {
+		var review_at sql.NullString
+		if len(pr.TimelineItems.Nodes) > 0 {
+			review_at = sql.NullString{
+				String: string(pr.TimelineItems.Nodes[0].ReviewRequestedEventFragment.CreatedAt),
+				Valid:  true,
+			}
+		}
 		batchUpdate = append(batchUpdate, map[string]interface{}{
-			"id":               pr.Id,
-			"title":            pr.Title,
-			"state":            pr.State,
-			"url":              pr.Url,
-			"merged_at":        pr.MergedAt,
-			"created_at":       pr.CreatedAt,
-			"additions":        pr.Additions,
-			"deletions":        pr.Deletions,
-			"branch_name":      pr.HeadRefName,
-			"author":           pr.Author.Login,
-			"repository_name":  pr.Repository.Name,
-			"repository_owner": pr.Repository.Owner.Login,
+			"id":                  pr.Id,
+			"url":                 pr.Url,
+			"title":               pr.Title,
+			"state":               pr.State,
+			"author":              pr.Author.Login,
+			"additions":           pr.Additions,
+			"deletions":           pr.Deletions,
+			"merged_at":           pr.MergedAt,
+			"created_at":          pr.CreatedAt,
+			"branch_name":         pr.HeadRefName,
+			"repository_name":     pr.Repository.Name,
+			"repository_owner":    pr.Repository.Owner.Login,
+			"reviews_requested":   pr.TimelineItems.TotalCount,
+			"review_requested_at": review_at,
 		})
 
 		if len(pr.Commits.Nodes) > 0 {
 			err = p.SaveCommits(string(pr.Id), pr.Commits.Nodes)
 		}
+
 		if err != nil {
 			p.Logger.Error("can't save commits", "pr", pr.Id, "commits", pr.Commits.Nodes)
 		}
 	}
 
-	_, err = p.db.NamedExec(`INSERT INTO prs (id, title, state, url, merged_at, created_at, additions, deletions, branch_name, author, repository_name, repository_owner)
-    VALUES (:id, :title, :state, :url, :merged_at, :created_at, :additions, :deletions, :branch_name, :author, :repository_name, :repository_owner) ON CONFLICT (id) DO NOTHING`, batchUpdate)
+	_, err = p.db.NamedExec(`INSERT INTO prs (id, title, state, url, merged_at, created_at, additions, deletions, branch_name, author, repository_name, repository_owner, review_requested_at, reviews_requested)
+    VALUES (:id, :title, :state, :url, :merged_at, :created_at, :additions, :deletions, :branch_name, :author, :repository_name, :repository_owner, :review_requested_at, :reviews_requested) ON CONFLICT (id) DO NOTHING`, batchUpdate)
 	if err != nil {
 		p.Logger.Error("can't insert new pull request", "error", err)
 		return
