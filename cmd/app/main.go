@@ -44,6 +44,7 @@ func setupHandlers(app *echo.Echo, db store.Store, l *slog.Logger) {
 func main() {
 	l := logger()
 	app := echo.New()
+	app.HideBanner = true
 	db := store.NewPostgres(l)
 	defer db.Close()
 
