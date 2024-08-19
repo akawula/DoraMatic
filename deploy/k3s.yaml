@@ -119,3 +119,36 @@ spec:
         - name: postgres-storage
           persistentVolumeClaim:
             claimName: postgres-pvc
+---
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: doramatic-cron
+spec:
+  schedule: "1 0 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: doramatic-cron
+            image: andrewkawula/doramatic:cron
+            imagePullPolicy: Always
+            env:
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-token
+                  key: GITHUB_TOKEN
+            - name: POSTGRES_DB
+              value: doramatic 
+            - name: POSTGRES_USER
+              value: doramatic
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-password
+                  key: POSTGRES_PASSWORD
+---

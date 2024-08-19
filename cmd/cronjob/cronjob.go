@@ -38,8 +38,8 @@ func main() {
 	i := 0
 	for _, repo := range repos {
 		i++
-		l.Info(fmt.Sprintf("Starting fetching pull requests [%d/%d]", i, max), "org", repo.Org, "repo", repo.Slug)
 		t := db.GetLastPRDate(repo.Org, repo.Slug)
+		l.Info(fmt.Sprintf("Starting fetching pull requests [%d/%d]", i, max), "org", repo.Org, "repo", repo.Slug, "lastPRdate", t)
 		r, err := pullrequests.Get(repo.Org, repo.Slug, t, l)
 		if err != nil {
 			slog.Error("there was an error while fetching pull requests", "error", err)
