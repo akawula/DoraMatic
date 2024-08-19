@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/akawula/DoraMatic/github/pullrequests"
@@ -148,12 +149,15 @@ func (p *Postgres) SavePullRequest(prs []pullrequests.PullRequest) (err error) {
 		}
 	}
 
-	_, err = p.db.NamedExec(`INSERT INTO prs (id, title, state, url, merged_at, created_at, additions, deletions, branch_name, author, repository_name, repository_owner, review_requested_at, reviews_requested)
-    VALUES (:id, :title, :state, :url, :merged_at, :created_at, :additions, :deletions, :branch_name, :author, :repository_name, :repository_owner, :review_requested_at, :reviews_requested) ON CONFLICT (id) DO NOTHING`, batchUpdate)
-	if err != nil {
-		p.Logger.Error("can't insert new pull request", "error", err)
-		return
+	for _, vals := range slices.Collect(slices.Chunk(batchUpdate, (2<<15-1)/14)) { // chunk the batchUpdate 65k / # of params (14 currently)
+		_, err = p.db.NamedExec(`INSERT INTO prs (id, title, state, url, merged_at, created_at, additions, deletions, branch_name, author, repository_name, repository_owner, review_requested_at, reviews_requested)
+    VALUES (:id, :title, :state, :url, :merged_at, :created_at, :additions, :deletions, :branch_name, :author, :repository_name, :repository_owner, :review_requested_at, :reviews_requested) ON CONFLICT (id) DO NOTHING`, vals)
+		if err != nil {
+			p.Logger.Error("can't insert new pull request", "error", err)
+			return
+		}
 	}
+
 	return
 }
 
