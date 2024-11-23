@@ -1,58 +1,58 @@
-kind: Deployment
-apiVersion: apps/v1
-metadata:
-  name: doramatic
-spec:
-  replicas: 2
-  #number of replicas generated
-  selector:
-    #assigns labels to the pods for future selection
-    matchLabels:
-      app: doramatic
-  template:
-    metadata:
-      labels:
-        app: doramatic
-    spec:
-      containers:
-      - name: doramatic
-        image: andrewkawula/doramatic:latest
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 2137
-        env:
-        - name: GITHUB_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: github-token
-              key: GITHUB_TOKEN
-        - name: POSTGRES_DB
-          value: doramatic 
-        - name: POSTGRES_USER
-          value: doramatic
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: postgres-password
-              key: POSTGRES_PASSWORD
----
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: doramatic
-  labels:
-    app: doramatic
-spec:
-  type: NodePort
-  ports:
-  - port: 2137
-    targetPort: 2137
-    nodePort: 30000
-    protocol: TCP
-  selector:
-    app: doramatic
----
+# kind: Deployment
+# apiVersion: apps/v1
+# metadata:
+#   name: doramatic
+# spec:
+#   replicas: 2
+#   #number of replicas generated
+#   selector:
+#     #assigns labels to the pods for future selection
+#     matchLabels:
+#       app: doramatic
+#   template:
+#     metadata:
+#       labels:
+#         app: doramatic
+#     spec:
+#       containers:
+#       - name: doramatic
+#         image: andrewkawula/doramatic:latest
+#         imagePullPolicy: Always
+#         ports:
+#         - containerPort: 2137
+#         env:
+#         - name: GITHUB_TOKEN
+#           valueFrom:
+#             secretKeyRef:
+#               name: github-token
+#               key: GITHUB_TOKEN
+#         - name: POSTGRES_DB
+#           value: doramatic 
+#         - name: POSTGRES_USER
+#           value: doramatic
+#         - name: POSTGRES_PASSWORD
+#           valueFrom:
+#             secretKeyRef:
+#               name: postgres-password
+#               key: POSTGRES_PASSWORD
+# ---
+#
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: doramatic
+#   labels:
+#     app: doramatic
+# spec:
+#   type: NodePort
+#   ports:
+#   - port: 2137
+#     targetPort: 2137
+#     nodePort: 30000
+#     protocol: TCP
+#   selector:
+#     app: doramatic
+# ---
 
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -99,7 +99,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:latest # it's local development, we don't need to lock ourself to specific version 
+          image: postgres:16 # it's local development, we don't need to lock ourself to specific version 
           ports:
             - containerPort: 5432
           env:
@@ -124,7 +124,7 @@ spec:
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: doramatic-cron
+  name: doramatic
 spec:
   schedule: "1 0 * * *"
   jobTemplate:
@@ -133,7 +133,7 @@ spec:
         spec:
           restartPolicy: OnFailure
           containers:
-          - name: doramatic-cron
+          - name: doramatic
             image: andrewkawula/doramatic:cron
             imagePullPolicy: Always
             env:
