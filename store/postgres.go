@@ -74,6 +74,7 @@ func (p *Postgres) GetRepos(page int, search string) ([]DBRepository, int, error
 }
 
 func (p *Postgres) SaveRepos(repos []repositories.Repository) error {
+	p.db.MustExec("TRUNCATE repositories")
 	batchUpdate := []map[string]interface{}{}
 	for _, repo := range repos {
 		batchUpdate = append(batchUpdate, map[string]interface{}{"org": repo.Owner.Login, "slug": string(repo.Name), "language": string(repo.PrimaryLanguage.Name)})
