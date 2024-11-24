@@ -15,6 +15,7 @@ type Store interface {
 	GetLastPRDate(org string, repo string) time.Time
 	SavePullRequest(prs []pullrequests.PullRequest) (err error)
 	GetAllRepos() ([]DBRepository, error)
+	SaveTeams(teams map[string][]string) error
 }
 
 func getQueryRepos(search string) (string, string) {

@@ -200,3 +200,21 @@ func (p *Postgres) GetAllRepos() ([]DBRepository, error) {
 
 	return repos, nil
 }
+
+func (p *Postgres) SaveTeams(teams map[string][]string) error {
+	p.db.MustExec("TRUNCATE teams")
+	for name, members := range teams {
+		batchUpdate := []map[string]interface{}{}
+		for _, member := range members {
+			batchUpdate = append(batchUpdate, map[string]interface{}{"team": name, "member": member})
+		}
+		_, err := p.db.NamedExec(`INSERT INTO teams (team, member)
+                              VALUES (:team, :member)`, batchUpdate)
+		if err != nil {
+			p.Logger.Error("can't insert new repository", "error", err)
+			return err
+		}
+	}
+
+	return nil
+}
