@@ -81,7 +81,7 @@ func (p *Postgres) SaveRepos(repos []repositories.Repository) error {
 	}
 
 	_, err := p.db.NamedExec(`INSERT INTO repositories (org, slug, language)
-    VALUES (:org, :slug, :language) ON CONFLICT (org, slug) DO NOTHING`, batchUpdate)
+    VALUES (:org, :slug, :language)`, batchUpdate)
 	if err != nil {
 		p.Logger.Error("can't insert new repository", "error", err)
 		return err
@@ -118,9 +118,16 @@ func (p *Postgres) SavePullRequest(prs []pullrequests.PullRequest) (err error) {
 	batchUpdate := []map[string]interface{}{}
 	for _, pr := range prs {
 		var review_at sql.NullString
+		var merged_at sql.NullString
 		if len(pr.TimelineItems.Nodes) > 0 {
 			review_at = sql.NullString{
 				String: string(pr.TimelineItems.Nodes[0].ReviewRequestedEventFragment.CreatedAt),
+				Valid:  true,
+			}
+		}
+		if len(pr.MergedAt) > 0 {
+			merged_at = sql.NullString{
+				String: string(pr.MergedAt),
 				Valid:  true,
 			}
 		}
@@ -132,7 +139,7 @@ func (p *Postgres) SavePullRequest(prs []pullrequests.PullRequest) (err error) {
 			"author":              pr.Author.Login,
 			"additions":           pr.Additions,
 			"deletions":           pr.Deletions,
-			"merged_at":           pr.MergedAt,
+			"merged_at":           merged_at,
 			"created_at":          pr.CreatedAt,
 			"branch_name":         pr.HeadRefName,
 			"repository_name":     pr.Repository.Name,
@@ -152,7 +159,10 @@ func (p *Postgres) SavePullRequest(prs []pullrequests.PullRequest) (err error) {
 
 	for _, vals := range slices.Collect(slices.Chunk(batchUpdate, (2<<15-1)/14)) { // chunk the batchUpdate 65k / # of params (14 currently)
 		_, err = p.db.NamedExec(`INSERT INTO prs (id, title, state, url, merged_at, created_at, additions, deletions, branch_name, author, repository_name, repository_owner, review_requested_at, reviews_requested)
-    VALUES (:id, :title, :state, :url, :merged_at, :created_at, :additions, :deletions, :branch_name, :author, :repository_name, :repository_owner, :review_requested_at, :reviews_requested) ON CONFLICT (id) DO NOTHING`, vals)
+    VALUES (:id, :title, :state, :url, :merged_at, :created_at, :additions, :deletions, :branch_name, :author, :repository_name, :repository_owner, :review_requested_at, :reviews_requested) 
+    ON CONFLICT (id) 
+    DO UPDATE 
+    SET title = EXCLUDED.title, state = EXCLUDED.state, merged_at = EXCLUDED.merged_at, additions = EXCLUDED.additions, deletions = EXCLUDED.deletions, review_requested_at = EXCLUDED.review_requested_at, reviews_requested = EXCLUDED.reviews_requested`, vals)
 		if err != nil {
 			p.Logger.Error("can't insert new pull request", "error", err)
 			return
