@@ -55,7 +55,7 @@ func Get(org string, repo string, lastDBDate time.Time, logger *slog.Logger) ([]
 					HasNextPage githubv4.Boolean
 					EndCursor   githubv4.String
 				}
-			} `graphql:"pullRequests(first:30, orderBy: {field: CREATED_AT, direction: DESC}, states: [MERGED], after: $after)"`
+			} `graphql:"pullRequests(first:30, orderBy: {field: CREATED_AT, direction: DESC}, states: [MERGED, OPEN], after: $after)"`
 		} `graphql:"repository(name: $name, owner: $login)"`
 	}
 
