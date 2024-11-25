@@ -91,8 +91,8 @@ func (p *Postgres) SaveRepos(repos []repositories.Repository) error {
 
 func (p *Postgres) GetLastPRDate(org string, repo string) (t time.Time) {
 	t = time.Now().AddDate(-2, 0, 0) // -2 years
-	w := map[string]interface{}{"org": org, "repo": repo}
-	rows, err := p.db.NamedQuery("SELECT merged_at FROM prs WHERE repository_owner = :org AND repository_name = :repo ORDER BY merged_at DESC LIMIT 1", w)
+	w := map[string]interface{}{"org": org, "repo": repo, "state": "MERGED"}
+	rows, err := p.db.NamedQuery("SELECT merged_at FROM prs WHERE state = :state AND repository_owner = :org AND repository_name = :repo ORDER BY merged_at DESC LIMIT 1", w)
 	if err != nil {
 		p.Logger.Error("Can't feetch last date of pr", "error", err, "repo", repo, "org", org)
 		return
