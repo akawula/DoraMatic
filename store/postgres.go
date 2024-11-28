@@ -218,3 +218,22 @@ func (p *Postgres) SaveTeams(teams map[string][]string) error {
 
 	return nil
 }
+
+/**
+* Fetch the yesterday's pull requests
+ */
+func (p *Postgres) FetchSecurityPullRequests() ([]SecurityPR, error) {
+	prs := []SecurityPR{}
+	err := p.db.Select(&prs, `select p.id, p.url, p.title, p.repository_name, p.repository_owner, p.author, p.additions, p.deletions, state, created_at, merged_at
+from teams t 
+inner join prs p ON p.author = t.member 
+where (created_at >= date_trunc('day', current_timestamp) - interval '1 day' and p.state = 'OPEN') or (merged_at >= date_trunc('day', current_timestamp) - interval '1 day' and p.state = 'MERGED') 
+and t.team in ('pe-customer-journey', 'PE Platform Insights', 'Webstack', 'Omnibus', 'CSI', 'pe-platform-fleet', 'ie-deploy', 'P&E - Team Domino', 'Ares', 'RD-Edge', 'Golden', 'RD - Production Engineering', 'Security Engineering')
+group by p.id order by additions + deletions DESC`)
+	if err != nil {
+		p.Logger.Error("can't fetch security pull requests", "error", err)
+		return nil, err
+	}
+
+	return prs, nil
+}

@@ -1,12 +1,27 @@
 package store
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
 )
+
+type SecurityPR struct {
+	Title           string
+	RepositoryName  string `db:"repository_name"`
+	RepositoryOwner string `db:"repository_owner"`
+	Author          string
+	Additions       int
+	Deletions       int
+	State           string
+	CreatedAt       string         `db:"created_at"`
+	MergedAt        sql.NullString `db:"merged_at"`
+	Url             string
+	Id              string
+}
 
 type Store interface {
 	Close()
@@ -16,6 +31,7 @@ type Store interface {
 	SavePullRequest(prs []pullrequests.PullRequest) (err error)
 	GetAllRepos() ([]DBRepository, error)
 	SaveTeams(teams map[string][]string) error
+	FetchSecurityPullRequests() ([]SecurityPR, error)
 }
 
 func getQueryRepos(search string) (string, string) {
