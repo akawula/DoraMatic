@@ -1,59 +1,3 @@
-# kind: Deployment
-# apiVersion: apps/v1
-# metadata:
-#   name: doramatic
-# spec:
-#   replicas: 2
-#   #number of replicas generated
-#   selector:
-#     #assigns labels to the pods for future selection
-#     matchLabels:
-#       app: doramatic
-#   template:
-#     metadata:
-#       labels:
-#         app: doramatic
-#     spec:
-#       containers:
-#       - name: doramatic
-#         image: andrewkawula/doramatic:latest
-#         imagePullPolicy: Always
-#         ports:
-#         - containerPort: 2137
-#         env:
-#         - name: GITHUB_TOKEN
-#           valueFrom:
-#             secretKeyRef:
-#               name: github-token
-#               key: GITHUB_TOKEN
-#         - name: POSTGRES_DB
-#           value: doramatic 
-#         - name: POSTGRES_USER
-#           value: doramatic
-#         - name: POSTGRES_PASSWORD
-#           valueFrom:
-#             secretKeyRef:
-#               name: postgres-password
-#               key: POSTGRES_PASSWORD
-# ---
-#
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: doramatic
-#   labels:
-#     app: doramatic
-# spec:
-#   type: NodePort
-#   ports:
-#   - port: 2137
-#     targetPort: 2137
-#     nodePort: 30000
-#     protocol: TCP
-#   selector:
-#     app: doramatic
-# ---
-
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -137,6 +81,11 @@ spec:
             image: andrewkawula/doramatic:cron
             imagePullPolicy: Always
             env:
+            - name: SLACK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slack-token
+                  key: SLACK_TOKEN
             - name: GITHUB_TOKEN
               valueFrom:
                 secretKeyRef:

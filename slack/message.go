@@ -62,14 +62,25 @@ func SendMessage(prs []store.SecurityPR) {
 	}
 
 	for c := range slices.Chunk(initialBlock, 50) {
-		sendMesasge(c)
+		sendMesasge(c, "UE9M08BLP")
 	}
+
+	sendMesasge([]map[string]interface{}{
+		{
+			"type": "section",
+			"text": map[string]interface{}{
+				"type":  "plain_text",
+				"emoji": true,
+				"text":  "Doramatic success!",
+			},
+		},
+	}, "UJ36ACNUD")
 }
 
-func sendMesasge(blocks []map[string]interface{}) error {
+func sendMesasge(blocks []map[string]interface{}, channel string) error {
 	// Message payload
 	payload := map[string]interface{}{
-		"channel": "UE9M08BLP",
+		"channel": channel,
 		"blocks":  blocks,
 	}
 
