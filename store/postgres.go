@@ -147,29 +147,99 @@ func (p *Postgres) SavePullRequest(prs []pullrequests.PullRequest) (err error) {
 			"reviews_requested":   pr.TimelineItems.TotalCount,
 			"review_requested_at": review_at,
 		})
-
-		if len(pr.Commits.Nodes) > 0 {
-			err = p.SaveCommits(string(pr.Id), pr.Commits.Nodes)
-		}
-
-		if err != nil {
-			p.Logger.Error("can't save commits", "pr", pr.Id, "commits", pr.Commits.Nodes)
-		}
 	}
 
+	// First, insert/update all PRs in the batch
 	for _, vals := range slices.Collect(slices.Chunk(batchUpdate, (2<<15-1)/14)) { // chunk the batchUpdate 65k / # of params (14 currently)
 		_, err = p.db.NamedExec(`INSERT INTO prs (id, title, state, url, merged_at, created_at, additions, deletions, branch_name, author, repository_name, repository_owner, review_requested_at, reviews_requested)
-    VALUES (:id, :title, :state, :url, :merged_at, :created_at, :additions, :deletions, :branch_name, :author, :repository_name, :repository_owner, :review_requested_at, :reviews_requested) 
-    ON CONFLICT (id) 
-    DO UPDATE 
+    VALUES (:id, :title, :state, :url, :merged_at, :created_at, :additions, :deletions, :branch_name, :author, :repository_name, :repository_owner, :review_requested_at, :reviews_requested)
+    ON CONFLICT (id)
+    DO UPDATE
     SET title = EXCLUDED.title, state = EXCLUDED.state, merged_at = EXCLUDED.merged_at, additions = EXCLUDED.additions, deletions = EXCLUDED.deletions, review_requested_at = EXCLUDED.review_requested_at, reviews_requested = EXCLUDED.reviews_requested`, vals)
 		if err != nil {
-			p.Logger.Error("can't insert new pull request", "error", err)
-			return
+			p.Logger.Error("can't insert/update pull requests", "error", err)
+			return // Return immediately if PR batch fails
 		}
 	}
 
-	return
+	// Now that PRs are saved, save their commits and reviews
+	for _, pr := range prs {
+		// Save commits associated with the PR
+		if len(pr.Commits.Nodes) > 0 {
+			commitErr := p.SaveCommits(string(pr.Id), pr.Commits.Nodes)
+			if commitErr != nil {
+				p.Logger.Error("can't save commits", "pr", pr.Id, "error", commitErr)
+				// Optionally aggregate errors instead of returning immediately
+				// For now, we log the error and continue with other PRs/reviews
+			}
+		}
+
+		// Save reviews associated with the PR
+		if len(pr.Reviews.Nodes) > 0 {
+			reviewErr := p.SavePullRequestReviews(string(pr.Id), pr.Reviews.Nodes)
+			if reviewErr != nil {
+				p.Logger.Error("can't save pull request reviews", "pr", pr.Id, "error", reviewErr)
+				// Log and continue, or potentially return the first error encountered
+				// Assigning to the named return variable 'err' if we want to signal failure
+				if err == nil { // Keep the first error encountered
+					err = reviewErr
+				}
+			}
+		}
+	}
+
+	return // Return the potentially captured error from saving reviews/commits
+}
+
+// SavePullRequestReviews saves pull request reviews to the database.
+func (p *Postgres) SavePullRequestReviews(pullRequestID string, reviews []pullrequests.Review) (err error) {
+	if len(reviews) == 0 {
+		return nil // Nothing to save
+	}
+
+	batchUpdate := []map[string]interface{}{}
+	for _, review := range reviews {
+		var submittedAt sql.NullString
+		if len(review.SubmittedAt) > 0 {
+			submittedAt = sql.NullString{String: string(review.SubmittedAt), Valid: true}
+		}
+
+		batchUpdate = append(batchUpdate, map[string]interface{}{
+			"id":              string(review.Id),
+			"pull_request_id": pullRequestID,
+			"author_login":    string(review.Author.Login),
+			"state":           string(review.State),
+			"body":            string(review.Body),
+			"url":             string(review.Url),
+			"submitted_at":    submittedAt,
+		})
+	}
+
+	// Use ON CONFLICT to update existing reviews if their state or body changes
+	query := `
+        INSERT INTO pull_request_reviews (id, pull_request_id, author_login, state, body, url, submitted_at)
+        VALUES (:id, :pull_request_id, :author_login, :state, :body, :url, :submitted_at)
+        ON CONFLICT (id) DO UPDATE SET
+            state = EXCLUDED.state,
+            body = EXCLUDED.body,
+            submitted_at = EXCLUDED.submitted_at,
+            updated_at = CURRENT_TIMESTAMP` // Rely on trigger or explicitly set here
+
+	// Chunk the batch update similar to SavePullRequest
+	// Calculate chunk size based on number of columns (7 in this case)
+	numCols := 7
+	chunkSize := (1<<15 - 1) / numCols // Roughly 65535 / 7 = ~9362
+
+	for _, vals := range slices.Collect(slices.Chunk(batchUpdate, chunkSize)) {
+		_, err = p.db.NamedExec(query, vals)
+		if err != nil {
+			p.Logger.Error("can't insert/update pull request reviews", "error", err, "pull_request_id", pullRequestID)
+			// Consider returning the error immediately or aggregating errors
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (p *Postgres) SaveCommits(pr_id string, commits []pullrequests.Commit) (err error) {
@@ -225,9 +295,9 @@ func (p *Postgres) SaveTeams(teams map[string][]string) error {
 func (p *Postgres) FetchSecurityPullRequests() ([]SecurityPR, error) {
 	prs := []SecurityPR{}
 	err := p.db.Select(&prs, `select p.id, p.url, p.title, p.repository_name, p.repository_owner, p.author, p.additions, p.deletions, state, created_at, merged_at
-from teams t 
-inner join prs p ON p.author = t.member 
-where (created_at >= date_trunc('day', current_timestamp) - interval '1 day' and p.state = 'OPEN') or (merged_at >= date_trunc('day', current_timestamp) - interval '1 day' and p.state = 'MERGED') 
+from teams t
+inner join prs p ON p.author = t.member
+where (created_at >= date_trunc('day', current_timestamp) - interval '1 day' and p.state = 'OPEN') or (merged_at >= date_trunc('day', current_timestamp) - interval '1 day' and p.state = 'MERGED')
 and t.team in ('pe-customer-journey', 'PE Platform Insights', 'Webstack', 'Omnibus', 'CSI', 'pe-platform-fleet', 'ie-deploy', 'P&E - Team Domino', 'Ares', 'RD-Edge', 'Golden', 'RD - Production Engineering', 'Security Engineering')
 group by p.id order by additions + deletions DESC`)
 	if err != nil {

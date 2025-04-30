@@ -2,3 +2,4 @@
 database.db
 tmp
 .vscode
+db_backup*

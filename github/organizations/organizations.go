@@ -2,13 +2,12 @@ package organizations
 
 import (
 	"context"
-	"os"
 
+	"github.com/akawula/DoraMatic/github/client" // Import client package
 	"github.com/shurcooL/githubv4"
-	"golang.org/x/oauth2"
 )
 
-var q struct {
+var orgQuery struct { // Renamed query variable to avoid conflict with other files
 	Viewer struct {
 		Organizations struct {
 			Nodes []struct {
@@ -22,20 +21,18 @@ var q struct {
 	}
 }
 
-func Get() ([]string, error) {
-	src := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: os.Getenv("GITHUB_TOKEN")},
-	)
-	httpClient := oauth2.NewClient(context.Background(), src)
-	client := githubv4.NewClient(httpClient)
+// Get fetches organization logins using the provided GitHubV4Client.
+func Get(ghClient client.GitHubV4Client) ([]string, error) {
+	// client := githubv4.NewClient(httpClient) // Removed: Use passed-in ghClient
 
-	err := client.Query(context.Background(), &q, nil)
+	// Use the renamed query variable 'orgQuery'
+	err := ghClient.Query(context.Background(), &orgQuery, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	results := []string{}
-	for _, login := range q.Viewer.Organizations.Nodes {
+	for _, login := range orgQuery.Viewer.Organizations.Nodes {
 		results = append(results, string(login.Login))
 	}
 

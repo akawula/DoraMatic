@@ -3,13 +3,12 @@ package organizations
 import (
 	"context"
 	"maps"
-	"os"
 
+	"github.com/akawula/DoraMatic/github/client" // Import client package
 	"github.com/shurcooL/githubv4"
-	"golang.org/x/oauth2"
 )
 
-var query struct {
+var teamQuery struct { // Renamed query variable to avoid conflict
 	Viewer struct {
 		Organization struct {
 			Teams struct {
@@ -34,15 +33,18 @@ var query struct {
 	}
 }
 
-func GetTeams() (map[string][]string, error) {
-	orgs, err := Get()
+// GetTeams fetches teams for all organizations using the provided GitHubV4Client.
+func GetTeams(ghClient client.GitHubV4Client) (map[string][]string, error) {
+	// Pass ghClient to organizations.Get
+	orgs, err := Get(ghClient)
 	if err != nil {
 		return nil, err
 	}
 
 	results := map[string][]string{}
 	for _, org := range orgs {
-		team, err := getTeam(org)
+		// Pass ghClient to getTeam
+		team, err := getTeam(ghClient, org)
 		if err != nil {
 			return nil, err
 		}
@@ -52,40 +54,39 @@ func GetTeams() (map[string][]string, error) {
 	return results, nil
 }
 
-func getTeam(org string) (map[string][]string, error) {
-	src := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: os.Getenv("GITHUB_TOKEN")},
-	)
-	httpClient := oauth2.NewClient(context.Background(), src)
-	client := githubv4.NewClient(httpClient)
+// getTeam fetches teams for a specific organization using the provided GitHubV4Client.
+func getTeam(ghClient client.GitHubV4Client, org string) (map[string][]string, error) {
+	// Removed internal client creation, use ghClient
 	variables := map[string]interface{}{"organization": githubv4.String(org), "teamsAfter": (*githubv4.String)(nil), "membersAfter": (*githubv4.String)(nil)}
 	retries := 3
 	results := make(map[string][]string)
 
 	for {
-		err := client.Query(context.Background(), &query, variables)
+		// Use ghClient and the renamed teamQuery
+		err := ghClient.Query(context.Background(), &teamQuery, variables)
 		if err != nil {
 			if retries > 0 {
-				retries--
+				retries-- // TODO: Add exponential backoff or delay
 				continue
 			}
 			return nil, err
 		}
 
-		if len(query.Viewer.Organization.Teams.Nodes) == 0 {
+		// Use renamed teamQuery
+		if len(teamQuery.Viewer.Organization.Teams.Nodes) == 0 {
 			break
 		}
 
-		teamName := query.Viewer.Organization.Teams.Nodes[0].Name
-		for _, m := range query.Viewer.Organization.Teams.Nodes[0].Members.Nodes {
+		teamName := teamQuery.Viewer.Organization.Teams.Nodes[0].Name
+		for _, m := range teamQuery.Viewer.Organization.Teams.Nodes[0].Members.Nodes {
 			results[string(teamName)] = append(results[string(teamName)], string(m.Login))
 		}
 
-		if query.Viewer.Organization.Teams.Nodes[0].Members.PageInfo.HasNextPage {
-			variables["membersAfter"] = query.Viewer.Organization.Teams.Nodes[0].Members.PageInfo.EndCursor
-		} else if query.Viewer.Organization.Teams.PageInfo.HasNextPage {
+		if teamQuery.Viewer.Organization.Teams.Nodes[0].Members.PageInfo.HasNextPage {
+			variables["membersAfter"] = teamQuery.Viewer.Organization.Teams.Nodes[0].Members.PageInfo.EndCursor
+		} else if teamQuery.Viewer.Organization.Teams.PageInfo.HasNextPage {
 			variables["membersAfter"] = (*githubv4.String)(nil)
-			variables["teamsAfter"] = query.Viewer.Organization.Teams.PageInfo.EndCursor
+			variables["teamsAfter"] = teamQuery.Viewer.Organization.Teams.PageInfo.EndCursor
 		} else {
 			break
 		}
