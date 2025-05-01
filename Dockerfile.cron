@@ -10,5 +10,6 @@ FROM gcr.io/distroless/static-debian11
 WORKDIR /app
 
 COPY --from=build cron cron
+COPY --from=build /migrations ./migrations
 
 ENTRYPOINT ["/app/cron"]

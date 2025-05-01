@@ -10,6 +10,7 @@ import (
 	"github.com/akawula/DoraMatic/github/organizations"
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
+	"github.com/akawula/DoraMatic/slack"
 	"github.com/akawula/DoraMatic/store"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -126,10 +127,10 @@ func main() {
 	}
 
 	// TODO: It's a hacky way to inform security on slack about the last day change, in the future link this dashboard to them
-	// prs, err := db.FetchSecurityPullRequests()
-	// if err != nil {
-	// 	l.Error("can't fetch the pull requests for security", "error", err)
-	// }
+	prs, err := db.FetchSecurityPullRequests()
+	if err != nil {
+		l.Error("can't fetch the pull requests for security", "error", err)
+	}
 
-	// slack.SendMessage(prs)
+	slack.SendMessage(prs)
 }
