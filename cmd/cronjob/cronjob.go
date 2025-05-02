@@ -41,8 +41,9 @@ func logger() *slog.Logger {
 // --- Function Types for Dependencies ---
 // These allow swapping real functions with mocks during testing.
 
-// GetTeamsFunc defines the signature for fetching teams.
-type GetTeamsFunc func(ghClient client.GitHubV4Client) (map[string][]string, error)
+// GetTeamsFunc defines the signature for fetching teams (including member avatars).
+// Changed return type value from []string to []organizations.MemberInfo
+type GetTeamsFunc func(ghClient client.GitHubV4Client) (map[string][]organizations.MemberInfo, error)
 
 // GetReposFunc defines the signature for fetching repositories.
 type GetReposFunc func(ghClient client.GitHubV4Client) ([]repositories.Repository, error)
@@ -84,15 +85,16 @@ func (a *App) Run(ctx context.Context) error {
 	a.log.Info("Starting cron job logic...")
 
 	// Fetch and save teams
-	teams, err := a.getTeamsFunc(a.ghClient)
+	teamsWithAvatars, err := a.getTeamsFunc(a.ghClient) // Renamed variable for clarity
 	if err != nil {
 		a.log.Error("Failed to fetch teams", "error", err)
 		return fmt.Errorf("fetching teams: %w", err) // Return error to indicate failure
 	}
-	for name, members := range teams {
-		a.log.Debug("Team found", "name", name, "members", len(members))
+	for name, members := range teamsWithAvatars { // Iterate over new map type
+		a.log.Debug("Team found", "name", name, "members", len(members)) // Log remains the same
 	}
-	if err = a.db.SaveTeams(ctx, teams); err != nil {
+	// Pass the new map type to SaveTeams (interface/implementation update needed)
+	if err = a.db.SaveTeams(ctx, teamsWithAvatars); err != nil {
 		a.log.Error("Failed to save teams to DB", "error", err)
 		// Continue execution even if saving teams fails? Or return err? Decide based on requirements.
 		// return fmt.Errorf("saving teams: %w", err)

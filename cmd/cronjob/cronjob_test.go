@@ -14,6 +14,7 @@ import (
 	"github.com/akawula/DoraMatic/github/repositories"
 	ghTypes "github.com/shurcooL/githubv4" // Alias to avoid conflict
 	"github.com/akawula/DoraMatic/store"
+	"github.com/akawula/DoraMatic/github/organizations" // Import organizations for MemberInfo
 	"github.com/akawula/DoraMatic/store/sqlc" // For store method signatures
 )
 
@@ -34,7 +35,8 @@ func (m *MockGitHubClient) Query(ctx context.Context, q interface{}, variables m
 
 // MockStore implements store.Store for testing
 type MockStore struct {
-	SaveTeamsFunc               func(ctx context.Context, teams map[string][]string) error
+	// Updated SaveTeamsFunc signature
+	SaveTeamsFunc               func(ctx context.Context, teams map[string][]organizations.MemberInfo) error
 	GetLastPRDateFunc           func(ctx context.Context, org string, repo string) time.Time
 	SavePullRequestFunc         func(ctx context.Context, prs []pullrequests.PullRequest) error
 	FetchSecurityPullRequestsFunc func() ([]store.SecurityPR, error)
@@ -48,7 +50,8 @@ type MockStore struct {
 	CloseCalled                   bool
 }
 
-func (m *MockStore) SaveTeams(ctx context.Context, teams map[string][]string) error {
+// Updated SaveTeams method signature
+func (m *MockStore) SaveTeams(ctx context.Context, teams map[string][]organizations.MemberInfo) error {
 	m.SaveTeamsCalled = true
 	if m.SaveTeamsFunc != nil {
 		return m.SaveTeamsFunc(ctx, teams)
@@ -95,9 +98,11 @@ func (m *MockStore) SaveRepos(ctx context.Context, repos []repositories.Reposito
 func (m *MockStore) GetAllRepos(ctx context.Context) ([]sqlc.Repository, error)         { return nil, nil }
 
 // Mock function types for GitHub interactions
-type MockGetTeamsFunc func() (map[string][]string, error)
-type MockGetReposFunc func() ([]repositories.Repository, error)
-type MockGetPullRequestsFunc func(org string, repo string, since time.Time) ([]pullrequests.PullRequest, error)
+// Updated MockGetTeamsFunc signature
+type MockGetTeamsFunc func(ghClient client.GitHubV4Client) (map[string][]organizations.MemberInfo, error)
+type MockGetReposFunc func(ghClient client.GitHubV4Client) ([]repositories.Repository, error)
+// Updated MockGetPullRequestsFunc signature to match cronjob.go
+type MockGetPullRequestsFunc func(ghClient client.GitHubV4Client, org string, repo string, since time.Time, l *slog.Logger) ([]pullrequests.PullRequest, error)
 
 // Mock function type for Slack
 type MockSendMessageFunc func(prs []store.SecurityPR)
@@ -111,8 +116,10 @@ func TestAppRun_Success(t *testing.T) {
 	mockGHClient := &MockGitHubClient{} // Use the new mock client
 	testLogger := slog.New(slog.NewJSONHandler(io.Discard, nil)) // Discard logs during test
 
-	// Mock data
-	testTeams := map[string][]string{"team-a": {"member1"}}
+	// Mock data - Updated testTeams to use MemberInfo
+	testTeams := map[string][]organizations.MemberInfo{
+		"team-a": {{Login: "member1", AvatarUrl: "url1"}},
+	}
 	testRepo := repositories.Repository{
 		Name: "repo1",
 		Owner: struct{ Login ghTypes.String }{Login: "org1"},
@@ -123,9 +130,9 @@ func TestAppRun_Success(t *testing.T) {
 	var capturedSecPRs []store.SecurityPR // To capture args passed to SendMessage
 	var sendMessageCalled bool            // Declare sendMessageCalled
 
-	// Configure mock behaviors
-	mockDB.SaveTeamsFunc = func(ctx context.Context, teams map[string][]string) error {
-		if len(teams) != 1 || teams["team-a"][0] != "member1" {
+	// Configure mock behaviors - Updated SaveTeamsFunc mock
+	mockDB.SaveTeamsFunc = func(ctx context.Context, teams map[string][]organizations.MemberInfo) error {
+		if len(teams) != 1 || teams["team-a"][0].Login != "member1" || teams["team-a"][0].AvatarUrl != "url1" {
 			t.Errorf("SaveTeams called with unexpected teams: %+v", teams)
 		}
 		return nil
@@ -146,9 +153,11 @@ func TestAppRun_Success(t *testing.T) {
 		return testSecPRs, nil
 	}
 
-	mockGetTeamsImpl := func(ghClient client.GitHubV4Client) (map[string][]string, error) {
+	// Updated mockGetTeamsImpl signature and return value
+	mockGetTeamsImpl := func(ghClient client.GitHubV4Client) (map[string][]organizations.MemberInfo, error) {
 		return testTeams, nil
 	}
+	// Updated mockGetReposImpl signature
 	mockGetReposImpl := func(ghClient client.GitHubV4Client) ([]repositories.Repository, error) {
 		return testRepos, nil
 	}

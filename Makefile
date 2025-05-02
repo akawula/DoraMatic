@@ -17,6 +17,13 @@ clean:
 test:
 	go test ./... -coverprofile=coverage.out && go tool cover -func=coverage.out
 
+# SQLC - Requires sqlc CLI: https://github.com/sqlc-dev/sqlc
+# Assumes sqlc is installed, potentially via: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+# and available in $HOME/go/bin
+sqlc:
+	@echo "Generating SQLC Go code..."
+	cd store/sqlc && $(HOME)/go/bin/sqlc generate
+
 push:
 	docker-buildx build -f Dockerfile.cron -t ${DOCKER_IMAGE_CRON} --platform=linux/arm64 . && docker push ${DOCKER_IMAGE_CRON}
 
@@ -32,16 +39,16 @@ migrate-create:
 
 migrate-up:
 	@echo "Applying all up migrations..."
-	migrate -database '$(DB_URL)' -path $(MIGRATION_PATH) up
+	$(HOME)/go/bin/migrate -database '$(DB_URL)' -path $(MIGRATION_PATH) up
 
 migrate-down:
 	@echo "Rolling back the last migration..."
-	migrate -database '$(DB_URL)' -path $(MIGRATION_PATH) down 1
+	$(HOME)/go/bin/migrate -database '$(DB_URL)' -path $(MIGRATION_PATH) down 1
 
 # Example: make migrate-force VERSION=20230101...
 migrate-force:
 	@echo "Forcing migration version $(VERSION)..."
-	migrate -database '$(DB_URL)' -path $(MIGRATION_PATH) force $(VERSION)
+	$(HOME)/go/bin/migrate -database '$(DB_URL)' -path $(MIGRATION_PATH) force $(VERSION)
 
 # Database Backup (for Kubernetes deployment)
 # Requires kubectl configured for your cluster
