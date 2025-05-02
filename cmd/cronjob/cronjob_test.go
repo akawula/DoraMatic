@@ -1,10 +1,211 @@
 package main
 
 import (
+	"context"
+	"io" // For discarding logger output in tests
 	"log/slog"
 	"os"
 	"testing"
+	"time"
+
+	// Import packages needed for mocks and App struct
+	"github.com/akawula/DoraMatic/github/client"
+	"github.com/akawula/DoraMatic/github/pullrequests"
+	"github.com/akawula/DoraMatic/github/repositories"
+	ghTypes "github.com/shurcooL/githubv4" // Alias to avoid conflict
+	"github.com/akawula/DoraMatic/store"
+	"github.com/akawula/DoraMatic/store/sqlc" // For store method signatures
 )
+
+// --- Mocks ---
+
+// MockGitHubClient implements client.GitHubV4Client
+type MockGitHubClient struct {
+	QueryFunc func(ctx context.Context, q interface{}, variables map[string]interface{}) error
+}
+
+func (m *MockGitHubClient) Query(ctx context.Context, q interface{}, variables map[string]interface{}) error {
+	if m.QueryFunc != nil {
+		return m.QueryFunc(ctx, q, variables)
+	}
+	// Default behavior: return nil, assuming success if QueryFunc is not set
+	return nil
+}
+
+// MockStore implements store.Store for testing
+type MockStore struct {
+	SaveTeamsFunc               func(ctx context.Context, teams map[string][]string) error
+	GetLastPRDateFunc           func(ctx context.Context, org string, repo string) time.Time
+	SavePullRequestFunc         func(ctx context.Context, prs []pullrequests.PullRequest) error
+	FetchSecurityPullRequestsFunc func() ([]store.SecurityPR, error)
+	CloseFunc                   func()
+
+	// Add fields to track calls if needed
+	SaveTeamsCalled               bool
+	GetLastPRDateCalledWith       [][2]string // Store org/repo pairs
+	SavePullRequestCalled         bool
+	FetchSecurityPullRequestsCalled bool
+	CloseCalled                   bool
+}
+
+func (m *MockStore) SaveTeams(ctx context.Context, teams map[string][]string) error {
+	m.SaveTeamsCalled = true
+	if m.SaveTeamsFunc != nil {
+		return m.SaveTeamsFunc(ctx, teams)
+	}
+	return nil // Default mock behavior
+}
+
+func (m *MockStore) GetLastPRDate(ctx context.Context, org string, repo string) time.Time {
+	m.GetLastPRDateCalledWith = append(m.GetLastPRDateCalledWith, [2]string{org, repo})
+	if m.GetLastPRDateFunc != nil {
+		return m.GetLastPRDateFunc(ctx, org, repo)
+	}
+	return time.Time{} // Default mock behavior (zero time)
+}
+
+func (m *MockStore) SavePullRequest(ctx context.Context, prs []pullrequests.PullRequest) error {
+	m.SavePullRequestCalled = true
+	if m.SavePullRequestFunc != nil {
+		return m.SavePullRequestFunc(ctx, prs)
+	}
+	return nil // Default mock behavior
+}
+
+func (m *MockStore) FetchSecurityPullRequests() ([]store.SecurityPR, error) {
+	m.FetchSecurityPullRequestsCalled = true
+	if m.FetchSecurityPullRequestsFunc != nil {
+		return m.FetchSecurityPullRequestsFunc()
+	}
+	return []store.SecurityPR{}, nil // Default mock behavior
+}
+
+func (m *MockStore) Close() {
+	m.CloseCalled = true
+	if m.CloseFunc != nil {
+		m.CloseFunc()
+	}
+}
+
+// Implement unused store.Store methods to satisfy the interface
+func (m *MockStore) GetRepos(ctx context.Context, page int, search string) ([]sqlc.Repository, int, error) {
+	return nil, 0, nil
+}
+func (m *MockStore) SaveRepos(ctx context.Context, repos []repositories.Repository) error { return nil }
+func (m *MockStore) GetAllRepos(ctx context.Context) ([]sqlc.Repository, error)         { return nil, nil }
+
+// Mock function types for GitHub interactions
+type MockGetTeamsFunc func() (map[string][]string, error)
+type MockGetReposFunc func() ([]repositories.Repository, error)
+type MockGetPullRequestsFunc func(org string, repo string, since time.Time) ([]pullrequests.PullRequest, error)
+
+// Mock function type for Slack
+type MockSendMessageFunc func(prs []store.SecurityPR)
+
+// Variables to hold the mock functions, allowing tests to swap them
+// --- Test for App.Run ---
+
+func TestAppRun_Success(t *testing.T) {
+	// Setup: Create mocks
+	mockDB := &MockStore{}
+	mockGHClient := &MockGitHubClient{} // Use the new mock client
+	testLogger := slog.New(slog.NewJSONHandler(io.Discard, nil)) // Discard logs during test
+
+	// Mock data
+	testTeams := map[string][]string{"team-a": {"member1"}}
+	testRepo := repositories.Repository{
+		Name: "repo1",
+		Owner: struct{ Login ghTypes.String }{Login: "org1"},
+	}
+	testRepos := []repositories.Repository{testRepo}
+	testPRs := []pullrequests.PullRequest{{Id: "pr1"}} // Corrected: ID -> Id
+	testSecPRs := []store.SecurityPR{{Id: "secpr1"}}
+	var capturedSecPRs []store.SecurityPR // To capture args passed to SendMessage
+	var sendMessageCalled bool            // Declare sendMessageCalled
+
+	// Configure mock behaviors
+	mockDB.SaveTeamsFunc = func(ctx context.Context, teams map[string][]string) error {
+		if len(teams) != 1 || teams["team-a"][0] != "member1" {
+			t.Errorf("SaveTeams called with unexpected teams: %+v", teams)
+		}
+		return nil
+	}
+	mockDB.GetLastPRDateFunc = func(ctx context.Context, org string, repo string) time.Time {
+		if org != "org1" || repo != "repo1" {
+			t.Errorf("GetLastPRDate called with unexpected org/repo: %s/%s", org, repo)
+		}
+		return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) // Return a fixed time
+	}
+	mockDB.SavePullRequestFunc = func(ctx context.Context, prs []pullrequests.PullRequest) error {
+		if len(prs) != 1 || prs[0].Id != "pr1" { // Corrected: ID -> Id
+			t.Errorf("SavePullRequest called with unexpected PRs: %+v", prs)
+		}
+		return nil
+	}
+	mockDB.FetchSecurityPullRequestsFunc = func() ([]store.SecurityPR, error) {
+		return testSecPRs, nil
+	}
+
+	mockGetTeamsImpl := func(ghClient client.GitHubV4Client) (map[string][]string, error) {
+		return testTeams, nil
+	}
+	mockGetReposImpl := func(ghClient client.GitHubV4Client) ([]repositories.Repository, error) {
+		return testRepos, nil
+	}
+	mockGetPullRequestsImpl := func(ghClient client.GitHubV4Client, org string, repo string, since time.Time, l *slog.Logger) ([]pullrequests.PullRequest, error) {
+		if org != "org1" || repo != "repo1" {
+			t.Errorf("GetPullRequests called with unexpected org/repo: %s/%s", org, repo)
+		}
+		// Check 'since' date if needed
+		return testPRs, nil
+	}
+	mockSendMessageImpl := func(prs []store.SecurityPR) {
+		sendMessageCalled = true // Mark as called
+		capturedSecPRs = prs    // Capture arguments
+	}
+
+	// Create App instance with mocks
+	app := NewApp(
+		testLogger,
+		mockDB,
+		mockGHClient,
+		mockGetTeamsImpl,        // Pass mock implementations directly
+		mockGetReposImpl,        // Pass mock implementations directly
+		mockGetPullRequestsImpl, // Pass mock implementations directly
+		mockSendMessageImpl,     // Pass mock implementations directly
+	)
+
+	// Execute: Run the app logic
+	err := app.Run(context.Background())
+
+	// Assert: Check results and mock calls
+	if err != nil {
+		t.Fatalf("App.Run() returned an unexpected error: %v", err)
+	}
+	if !mockDB.SaveTeamsCalled {
+		t.Error("Expected db.SaveTeams to be called, but it wasn't.")
+	}
+	if len(mockDB.GetLastPRDateCalledWith) != 1 {
+		t.Errorf("Expected db.GetLastPRDate to be called once, called %d times.", len(mockDB.GetLastPRDateCalledWith))
+	}
+	if !mockDB.SavePullRequestCalled {
+		t.Error("Expected db.SavePullRequest to be called, but it wasn't.")
+	}
+	if !mockDB.FetchSecurityPullRequestsCalled {
+		t.Error("Expected db.FetchSecurityPullRequests to be called, but it wasn't.")
+	}
+	if !sendMessageCalled {
+		t.Error("Expected SendMessage to be called, but it wasn't.")
+	}
+	if len(capturedSecPRs) != 1 || capturedSecPRs[0].Id != "secpr1" {
+		t.Errorf("SendMessage called with unexpected PRs: %+v", capturedSecPRs)
+	}
+	// Add more assertions as needed (e.g., checking mockGHClient calls if relevant)
+}
+
+// TODO: Add more test cases for error scenarios (e.g., GetTeams fails, SaveRepos fails, etc.)
+
+// --- Original Tests ---
 
 func TestDebug(t *testing.T) {
 	// Test case 1: DEBUG environment variable is not set or empty
@@ -33,4 +234,19 @@ func TestDebug(t *testing.T) {
 
 	// Clean up the environment variable after the test
 	os.Unsetenv("DEBUG")
+}
+
+func TestLogger(t *testing.T) {
+	// Call the logger function
+	l := logger()
+
+	// Basic check: ensure the logger is not nil
+	if l == nil {
+		t.Fatal("logger() returned nil, expected a valid *slog.Logger instance")
+	}
+
+	// Optional: You could potentially try to capture stdout and verify JSON format,
+	// but that adds complexity. For now, ensuring it doesn't panic and returns
+	// a non-nil logger is a reasonable basic test.
+	// We already test the log level logic via TestDebug.
 }

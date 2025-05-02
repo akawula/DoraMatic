@@ -3,3 +3,4 @@ database.db
 tmp
 .vscode
 db_backup*
+coverage.out

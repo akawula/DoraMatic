@@ -1,15 +1,13 @@
 DOCKER_IMAGE_CRON=andrewkawula/doramatic:cron
 
-default: run
+default: run-cron
 
-build:
+build-cron:
 	GOARCH=amd64 GOOS=darwin go build -o app/cron cmd/cronjob/cronjob.go
 
+build: build-cron
 
-run: clean build
-	DEBUG=1 ./app/cron
-
-run-cron: build
+run-cron: clean build-cron
 	DEBUG=1 ./app/cron
 
 clean:

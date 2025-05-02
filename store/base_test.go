@@ -1,56 +1,8 @@
 package store
 
 import (
-	"strings"
 	"testing"
 )
-
-func TestGetQueryRepos(t *testing.T) {
-	testCases := []struct {
-		name           string
-		search         string
-		expectedSelect string
-		expectedCount  string
-	}{
-		{
-			name:           "No search term",
-			search:         "",
-			expectedSelect: "SELECT org, slug, language FROM repositories ORDER by slug, org",
-			expectedCount:  "SELECT count(*) as total FROM repositories",
-		},
-		{
-			name:           "With search term",
-			search:         "my-repo",
-			expectedSelect: "SELECT org, slug, language FROM repositories WHERE slug LIKE '%my-repo%' ORDER by slug, org",
-			expectedCount:  "SELECT count(*) as total FROM repositories WHERE slug LIKE '%my-repo%'",
-		},
-		{
-			name:   "Search term with special characters (ensure basic quoting)",
-			search: "test'repo",
-			// Note: This basic test assumes the input is relatively clean.
-			// Real-world scenarios might need more robust SQL injection prevention.
-			expectedSelect: "SELECT org, slug, language FROM repositories WHERE slug LIKE '%test'repo%' ORDER by slug, org",
-			expectedCount:  "SELECT count(*) as total FROM repositories WHERE slug LIKE '%test'repo%'",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actualSelect, actualCount := getQueryRepos(tc.search)
-			// Normalize whitespace for comparison robustness
-			normalize := func(s string) string {
-				return strings.Join(strings.Fields(s), " ")
-			}
-
-			if normalize(actualSelect) != normalize(tc.expectedSelect) {
-				t.Errorf("Select query mismatch:\nExpected: %s\nActual:   %s", tc.expectedSelect, actualSelect)
-			}
-			if normalize(actualCount) != normalize(tc.expectedCount) {
-				t.Errorf("Count query mismatch:\nExpected: %s\nActual:   %s", tc.expectedCount, actualCount)
-			}
-		})
-	}
-}
 
 func TestCalculateOffset(t *testing.T) {
 	testCases := []struct {

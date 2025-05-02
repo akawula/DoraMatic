@@ -10,12 +10,21 @@ import (
 	"slices"
 
 	"github.com/akawula/DoraMatic/store"
+	"time" // Add time import for formatting
 )
 
+// slackAPIURL is the endpoint for posting messages. Can be overridden for tests.
+var slackAPIURL = "https://slack.com/api/chat.postMessage"
+
 func templatePullRequest(pr store.SecurityPR) []map[string]interface{} {
+	mergedAtStr := "N/A"
+	if pr.MergedAt.Valid {
+		mergedAtStr = pr.MergedAt.Time.Format(time.RFC1123) // Format the time if valid
+	}
+
 	m := fmt.Sprintf("%s\n*%s* [+%d -%d] Author: %s\nState: %s, Created At: %s", pr.Title, pr.RepositoryName, pr.Additions, pr.Deletions, pr.Author, pr.State, pr.CreatedAt)
 	if pr.State == "MERGED" {
-		m = fmt.Sprintf("%s\n*%s* [+%d -%d] Author: %s\nState: %s, Merged At: %s", pr.Title, pr.RepositoryName, pr.Additions, pr.Deletions, pr.Author, pr.State, pr.MergedAt.String)
+		m = fmt.Sprintf("%s\n*%s* [+%d -%d] Author: %s\nState: %s, Merged At: %s", pr.Title, pr.RepositoryName, pr.Additions, pr.Deletions, pr.Author, pr.State, mergedAtStr) // Use the formatted string
 	}
 	return []map[string]interface{}{
 		{
@@ -89,8 +98,7 @@ func sendMesasge(blocks []map[string]interface{}, channel string) error {
 	if len(token) == 0 {
 		return errors.New("SLACK_TOKEN env is required")
 	}
-	// Slack API endpoint for sending messages
-	url := "https://slack.com/api/chat.postMessage"
+
 	// Convert payload to JSON
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -98,7 +106,7 @@ func sendMesasge(blocks []map[string]interface{}, channel string) error {
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
+	req, err := http.NewRequest("POST", slackAPIURL, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return err
 	}

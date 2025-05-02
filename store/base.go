@@ -1,15 +1,21 @@
 package store
 
 import (
-	"database/sql"
-	"fmt"
+	"context" // Add context
+	// "database/sql" // Remove unused import
+	// "fmt" // Remove unused import
 	"time"
 
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
+	"github.com/akawula/DoraMatic/store/sqlc" // Import sqlc package
+	"github.com/jackc/pgx/v5/pgtype"          // Import pgtype for SecurityPR.MergedAt
 )
 
+// Need to keep SecurityPR definition consistent with its usage in postgres.go mapping
 type SecurityPR struct {
+	Id              string // Changed from ID to Id based on postgres.go usage
+	Url             string // Changed from URL to Url
 	Title           string
 	RepositoryName  string `db:"repository_name"`
 	RepositoryOwner string `db:"repository_owner"`
@@ -17,34 +23,35 @@ type SecurityPR struct {
 	Additions       int
 	Deletions       int
 	State           string
-	CreatedAt       string         `db:"created_at"`
-	MergedAt        sql.NullString `db:"merged_at"`
-	Url             string
-	Id              string
+	CreatedAt       string         `db:"created_at"` // Keep as string
+	MergedAt        pgtype.Timestamptz `db:"merged_at"` // Changed to pgtype.Timestamptz as used in postgres.go
 }
 
 type Store interface {
 	Close()
-	GetRepos(page int, search string) ([]DBRepository, int, error)
-	SaveRepos([]repositories.Repository) error
-	GetLastPRDate(org string, repo string) time.Time
-	SavePullRequest(prs []pullrequests.PullRequest) (err error)
-	GetAllRepos() ([]DBRepository, error)
-	SaveTeams(teams map[string][]string) error
+	// Updated signatures to include context and use sqlc types
+	GetRepos(ctx context.Context, page int, search string) ([]sqlc.Repository, int, error)
+	SaveRepos(ctx context.Context, repos []repositories.Repository) error
+	GetLastPRDate(ctx context.Context, org string, repo string) time.Time
+	SavePullRequest(ctx context.Context, prs []pullrequests.PullRequest) (err error)
+	GetAllRepos(ctx context.Context) ([]sqlc.Repository, error)
+	SaveTeams(ctx context.Context, teams map[string][]string) error
+	// FetchSecurityPullRequests signature remains the same (no context, returns []SecurityPR)
 	FetchSecurityPullRequests() ([]SecurityPR, error)
 }
 
-func getQueryRepos(search string) (string, string) {
-	s := `SELECT org, slug, language `
-	c := `SELECT count(*) as total `
-	q := `FROM repositories`
-	if len(search) > 0 {
-		q = fmt.Sprintf(`FROM repositories WHERE slug LIKE '%%%s%%'`, search)
-	}
+// getQueryRepos is no longer used by postgres.go after sqlc refactor
+// func getQueryRepos(search string) (string, string) {
+// 	s := `SELECT org, slug, language `
+// 	c := `SELECT count(*) as total `
+// 	q := `FROM repositories`
+// 	if len(search) > 0 {
+// 		q = fmt.Sprintf(`FROM repositories WHERE slug LIKE '%%%s%%'`, search)
+// 	}
 
-	return s + q + " ORDER by slug, org", c + q
-}
-
+// 	return s + q + " ORDER by slug, org", c + q
+// }
+// Keep only one valid calculateOffset function
 func calculateOffset(page, limit int) (offset int) {
 	offset = (page - 1) * limit
 

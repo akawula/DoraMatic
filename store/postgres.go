@@ -1,309 +1,423 @@
 package store
 
 import (
-	"database/sql"
+	"context"
+	"database/sql" // Re-add for sql.NullString
 	"fmt"
 	"log/slog"
 	"os"
-	"slices"
+
+	// "slices" // No longer needed directly in this file after refactor
 	"time"
 
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
-	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	"github.com/akawula/DoraMatic/store/sqlc" // Import the generated package
+	"github.com/jackc/pgx/v5"                 // Needed for pgx.ErrNoRows
+	"github.com/jackc/pgx/v5/pgtype"          // Import pgtype for timestamptz handling
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type DBRepository struct {
-	Org      string
-	Slug     string
-	Language string
-}
+// DBRepository type is replaced by sqlc.Repository
+// type DBRepository struct {
+// 	Org      string
+// 	Slug     string
+// 	Language string
+// }
 
-type Count struct {
-	Total int
-}
+// Count struct is replaced by sqlc's direct return value (int64) for CountRepositories
+// type Count struct {
+// 	Total int
+// }
+
+// SecurityPR struct definition removed, assume it's in base.go
+
 
 type Postgres struct {
-	db     *sqlx.DB
-	Logger *slog.Logger
+	connPool *pgxpool.Pool // Use pgx connection pool
+	queries  *sqlc.Queries // Use generated queries
+	Logger   *slog.Logger
 }
 
-func NewPostgres(logger *slog.Logger) Store {
-	connection := fmt.Sprintf("user=%s dbname=%s sslmode=disable password=%s host=%s port=%s", os.Getenv("POSTGRES_USER"), os.Getenv("POSTGRES_DB"), os.Getenv("POSTGRES_PASSWORD"), os.Getenv("POSTGRES_SERVICE_HOST"), os.Getenv("POSTGRES_SERVICE_PORT"))
-	db, err := sqlx.Connect("postgres", connection)
+// NewPostgres creates a new Postgres store instance using pgx and sqlc.
+// NOTE: Changed signature to accept context.Context for pgxpool.New
+func NewPostgres(ctx context.Context, logger *slog.Logger) Store {
+	connectionString := fmt.Sprintf("user=%s dbname=%s sslmode=disable password=%s host=%s port=%s", os.Getenv("POSTGRES_USER"), os.Getenv("POSTGRES_DB"), os.Getenv("POSTGRES_PASSWORD"), os.Getenv("POSTGRES_SERVICE_HOST"), os.Getenv("POSTGRES_SERVICE_PORT"))
+
+	// Use pgxpool for connection pooling
+	pool, err := pgxpool.New(ctx, connectionString)
 	if err != nil {
-		logger.Error("can't connect to postgres", "error", err)
+		logger.Error("Unable to connect to database", "error", err)
+		// In a real app, you might want to handle this more gracefully, maybe os.Exit(1) or return error
+		panic(err) // Or return an error and handle it in the caller
 	}
 
-	return &Postgres{db: db, Logger: logger}
+	// Create sqlc Queries instance
+	queries := sqlc.New(pool)
+
+	return &Postgres{connPool: pool, queries: queries, Logger: logger}
 }
 
+// Close closes the database connection pool.
 func (p *Postgres) Close() {
-	p.db.Close()
+	p.connPool.Close()
 }
 
-func (p *Postgres) getTotal(q string) int {
-	t := Count{}
-	p.Logger.Debug("Executing total query", "query", q)
+// getTotal is no longer needed as CountRepositories query handles it.
+// func (p *Postgres) getTotal(q string) int { ... }
 
-	if err := p.db.Get(&t, q); err != nil {
-		p.Logger.Error("can't calculate total", "error", err)
-		return 0
+// GetRepos retrieves repositories using generated sqlc code.
+// NOTE: Return type uses the generated sqlc.Repository struct.
+func (p *Postgres) GetRepos(ctx context.Context, page int, search string) ([]sqlc.Repository, int, error) {
+	limit := int32(20) // sqlc uses specific int types
+	offset := int32(calculateOffset(page, int(limit))) // Assumes calculateOffset is accessible
+
+	p.Logger.Debug("Fetching repositories", "search", search, "limit", limit, "offset", offset)
+
+	// Get total count using sqlc query
+	total, err := p.queries.CountRepositories(ctx, search) // Pass search term directly
+	if err != nil {
+		p.Logger.Error("can't count repositories", "error", err)
+		return nil, 0, err
 	}
 
-	return t.Total
-}
-
-func (p *Postgres) GetRepos(page int, search string) ([]DBRepository, int, error) {
-	repos := []DBRepository{}
-	limit := 20 // TODO: someday make it a param from echo, so customer can choose how many rows to show at once
-	offset := calculateOffset(page, limit)
-	query, queryTotal := getQueryRepos(search)
-	lo := fmt.Sprintf(` LIMIT %d OFFSET %d`, limit, offset)
-	p.Logger.Debug("Executing PSQL query", "query", query+lo)
-
-	total := p.getTotal(queryTotal)
-
-	if err := p.db.Select(&repos, query+lo); err != nil {
+	// Fetch the repositories for the current page using sqlc query
+	// ListRepositoriesParams expects Column1 (search) as string
+	repos, err := p.queries.ListRepositories(ctx, sqlc.ListRepositoriesParams{
+		Column1: search,
+		Limit:   limit,
+		Offset:  offset,
+	})
+	if err != nil {
 		p.Logger.Error("can't fetch repositories", "error", err)
 		return nil, 0, err
 	}
 
-	return repos, total, nil
+	// Note: The return type is now []sqlc.ListRepositoriesRow.
+	// Adjust downstream code or map the results if necessary.
+	return repos, int(total), nil
 }
 
-func (p *Postgres) SaveRepos(repos []repositories.Repository) error {
-	p.db.MustExec("TRUNCATE repositories")
-	batchUpdate := []map[string]interface{}{}
-	for _, repo := range repos {
-		batchUpdate = append(batchUpdate, map[string]interface{}{"org": repo.Owner.Login, "slug": string(repo.Name), "language": string(repo.PrimaryLanguage.Name)})
-	}
-
-	_, err := p.db.NamedExec(`INSERT INTO repositories (org, slug, language)
-    VALUES (:org, :slug, :language)`, batchUpdate)
+// SaveRepos saves repositories using generated sqlc code within a transaction.
+// NOTE: Changed signature to accept context.Context.
+func (p *Postgres) SaveRepos(ctx context.Context, repos []repositories.Repository) error {
+	tx, err := p.connPool.Begin(ctx)
 	if err != nil {
-		p.Logger.Error("can't insert new repository", "error", err)
+		p.Logger.Error("Failed to begin transaction for saving repos", "error", err)
 		return err
 	}
-	return nil
-}
+	defer tx.Rollback(ctx) // Rollback if anything goes wrong
 
-func (p *Postgres) GetLastPRDate(org string, repo string) (t time.Time) {
-	t = time.Now().AddDate(-2, 0, 0) // -2 years
-	w := map[string]interface{}{"org": org, "repo": repo, "state": "MERGED"}
-	rows, err := p.db.NamedQuery("SELECT merged_at FROM prs WHERE state = :state AND repository_owner = :org AND repository_name = :repo ORDER BY merged_at DESC LIMIT 1", w)
+	qtx := p.queries.WithTx(tx) // Use queries within the transaction
+
+	// Truncate the table first
+	err = qtx.TruncateRepositories(ctx)
 	if err != nil {
-		p.Logger.Error("Can't feetch last date of pr", "error", err, "repo", repo, "org", org)
-		return
+		p.Logger.Error("Failed to truncate repositories", "error", err)
+		return err
 	}
 
-	for rows.Next() {
-		err := rows.Scan(&t)
-		if err != nil {
-			p.Logger.Error("there was an error while scanning rows for last date", "error", err, "org", org, "repo", repo)
-			return
+	// Insert new repositories
+	for _, repo := range repos {
+		// Safely handle potential empty string for language
+		var lang pgtype.Text // CreateRepositoryParams expects pgtype.Text
+		// Correct check for struct field's value
+		if repo.PrimaryLanguage.Name != "" {
+			lang = pgtype.Text{String: string(repo.PrimaryLanguage.Name), Valid: true}
 		}
-	}
+		err = qtx.CreateRepository(ctx, sqlc.CreateRepositoryParams{
+			Org:      string(repo.Owner.Login), // Cast githubv4.String
+			Slug:     string(repo.Name),      // Cast githubv4.String
+			Language: lang,                   // Pass pgtype.Text
+		})
+		if err != nil {
+			p.Logger.Error("Failed to insert repository", "repo", repo.Name, "error", err)
+			return err // Rollback happens automatically due to defer tx.Rollback
+		} // Closing brace for the if err != nil block
+	} // Closing brace for the loop
 
-	return
+	// Commit the transaction if all inserts were successful
+	return tx.Commit(ctx)
 }
 
-func (p *Postgres) SavePullRequest(prs []pullrequests.PullRequest) (err error) {
+// GetLastPRDate retrieves the last merged date for a PR using generated sqlc code.
+// NOTE: Changed signature to accept context.Context. Return type is time.Time as before.
+func (p *Postgres) GetLastPRDate(ctx context.Context, org string, repo string) time.Time {
+	defaultTime := time.Now().AddDate(-2, 0, 0) // Default to -2 years
+
+	// Use sqlc query. Parameters seem to expect strings based on query.sql ($1, $2, $3)
+	// Result type is pgtype.Timestamptz. Params struct expects pgtype.Text.
+	mergedAtResult, err := p.queries.GetLastPullRequestMergedDate(ctx, sqlc.GetLastPullRequestMergedDateParams{
+		State:           pgtype.Text{String: "MERGED", Valid: true},
+		RepositoryOwner: pgtype.Text{String: org, Valid: true},
+		RepositoryName:  pgtype.Text{String: repo, Valid: true},
+	})
+
+	if err != nil {
+		// Log the error but return the default time as per original logic
+		if err == pgx.ErrNoRows {
+			p.Logger.Info("No merged PRs found for repository, using default date", "repo", repo, "org", org)
+		} else {
+			p.Logger.Error("Can't fetch last date of pr", "error", err, "repo", repo, "org", org)
+		}
+		return defaultTime
+	}
+
+	// Check if the pgtype.Timestamptz result is valid
+	if mergedAtResult.Valid {
+		return mergedAtResult.Time
+	}
+
+	// If merged_at is NULL in the database for the latest merged PR (unlikely but possible)
+	p.Logger.Warn("Latest merged PR has NULL merged_at date", "repo", repo, "org", org)
+	return defaultTime
+}
+
+
+// SavePullRequest saves pull requests and their associated commits/reviews using sqlc within a transaction.
+// NOTE: Changed signature to accept context.Context.
+func (p *Postgres) SavePullRequest(ctx context.Context, prs []pullrequests.PullRequest) (err error) {
 	if len(prs) == 0 {
-		p.Logger.Info("Pull Requests slice is empty, going next...")
-		return
+		p.Logger.Info("Pull Requests slice is empty, nothing to save.")
+		return nil
 	}
 
-	batchUpdate := []map[string]interface{}{}
+	tx, err := p.connPool.Begin(ctx)
+	if err != nil {
+		p.Logger.Error("Failed to begin transaction for saving PRs", "error", err)
+		return err
+	}
+	defer tx.Rollback(ctx) // Ensure rollback on error
+
+	qtx := p.queries.WithTx(tx)
+
 	for _, pr := range prs {
-		var review_at sql.NullString
-		var merged_at sql.NullString
-		if len(pr.TimelineItems.Nodes) > 0 {
-			review_at = sql.NullString{
-				String: string(pr.TimelineItems.Nodes[0].ReviewRequestedEventFragment.CreatedAt),
-				Valid:  true,
+		// Prepare parameters for sqlc UpsertPullRequest
+		var reviewAt pgtype.Timestamptz
+		if len(pr.TimelineItems.Nodes) > 0 && pr.TimelineItems.Nodes[0].ReviewRequestedEventFragment.CreatedAt != "" {
+			t, parseErr := time.Parse(time.RFC3339, string(pr.TimelineItems.Nodes[0].ReviewRequestedEventFragment.CreatedAt))
+			if parseErr == nil {
+				reviewAt = pgtype.Timestamptz{Time: t, Valid: true}
+			} else {
+				p.Logger.Warn("Failed to parse review_requested_at", "value", pr.TimelineItems.Nodes[0].ReviewRequestedEventFragment.CreatedAt, "error", parseErr)
 			}
 		}
-		if len(pr.MergedAt) > 0 {
-			merged_at = sql.NullString{
-				String: string(pr.MergedAt),
-				Valid:  true,
-			}
-		}
-		batchUpdate = append(batchUpdate, map[string]interface{}{
-			"id":                  pr.Id,
-			"url":                 pr.Url,
-			"title":               pr.Title,
-			"state":               pr.State,
-			"author":              pr.Author.Login,
-			"additions":           pr.Additions,
-			"deletions":           pr.Deletions,
-			"merged_at":           merged_at,
-			"created_at":          pr.CreatedAt,
-			"branch_name":         pr.HeadRefName,
-			"repository_name":     pr.Repository.Name,
-			"repository_owner":    pr.Repository.Owner.Login,
-			"reviews_requested":   pr.TimelineItems.TotalCount,
-			"review_requested_at": review_at,
-		})
-	}
 
-	// First, insert/update all PRs in the batch
-	for _, vals := range slices.Collect(slices.Chunk(batchUpdate, (2<<15-1)/14)) { // chunk the batchUpdate 65k / # of params (14 currently)
-		_, err = p.db.NamedExec(`INSERT INTO prs (id, title, state, url, merged_at, created_at, additions, deletions, branch_name, author, repository_name, repository_owner, review_requested_at, reviews_requested)
-    VALUES (:id, :title, :state, :url, :merged_at, :created_at, :additions, :deletions, :branch_name, :author, :repository_name, :repository_owner, :review_requested_at, :reviews_requested)
-    ON CONFLICT (id)
-    DO UPDATE
-    SET title = EXCLUDED.title, state = EXCLUDED.state, merged_at = EXCLUDED.merged_at, additions = EXCLUDED.additions, deletions = EXCLUDED.deletions, review_requested_at = EXCLUDED.review_requested_at, reviews_requested = EXCLUDED.reviews_requested`, vals)
+		var mergedAt pgtype.Timestamptz
+		if pr.MergedAt != "" {
+			t, parseErr := time.Parse(time.RFC3339, string(pr.MergedAt))
+			if parseErr == nil {
+				mergedAt = pgtype.Timestamptz{Time: t, Valid: true}
+			} else {
+				p.Logger.Warn("Failed to parse merged_at", "value", pr.MergedAt, "error", parseErr)
+			}
+		}
+
+		createdAt, parseErr := time.Parse(time.RFC3339, string(pr.CreatedAt)) // Cast githubv4.String
+		if parseErr != nil {
+			p.Logger.Error("Failed to parse created_at, skipping PR", "pr_id", string(pr.Id), "value", string(pr.CreatedAt), "error", parseErr) // Cast Id and CreatedAt for logging
+			continue // Skip this PR if created_at is invalid
+		}
+		pgCreatedAt := pgtype.Timestamptz{Time: createdAt, Valid: true} // Assuming CreatedAt is non-nullable
+
+		// Revert Timestamptz vars to sql.NullTime if that's what sqlc generates for nullable timestamps
+		// Or keep pgtype if that's accurate after regeneration check (let's keep pgtype for now)
+		// Match the exact types from the generated UpsertPullRequestParams struct
+		params := sqlc.UpsertPullRequestParams{
+			ID:                string(pr.Id), // Cast githubv4.String
+			Title:             sql.NullString{String: string(pr.Title), Valid: pr.Title != ""},      // sql.NullString
+			State:             pgtype.Text{String: string(pr.State), Valid: pr.State != ""},           // pgtype.Text
+			Url:               sql.NullString{String: string(pr.Url), Valid: pr.Url != ""},          // sql.NullString
+			MergedAt:          mergedAt,    // pgtype.Timestamptz
+			CreatedAt:         pgCreatedAt.Time, // time.Time
+			Additions:         pgtype.Int4{Int32: int32(pr.Additions), Valid: true},         // pgtype.Int4
+			Deletions:         pgtype.Int4{Int32: int32(pr.Deletions), Valid: true},         // pgtype.Int4
+			BranchName:        sql.NullString{String: string(pr.HeadRefName), Valid: pr.HeadRefName != ""}, // sql.NullString
+			Author:            pgtype.Text{String: string(pr.Author.Login), Valid: pr.Author.Login != ""}, // pgtype.Text
+			RepositoryName:    pgtype.Text{String: string(pr.Repository.Name), Valid: pr.Repository.Name != ""}, // pgtype.Text
+			RepositoryOwner:   pgtype.Text{String: string(pr.Repository.Owner.Login), Valid: pr.Repository.Owner.Login != ""}, // pgtype.Text
+			ReviewsRequested:  pgtype.Int4{Int32: int32(pr.TimelineItems.TotalCount), Valid: true}, // pgtype.Int4
+			ReviewRequestedAt: reviewAt, // pgtype.Timestamptz
+		}
+
+		err = qtx.UpsertPullRequest(ctx, params)
 		if err != nil {
-			p.Logger.Error("can't insert/update pull requests", "error", err)
-			return // Return immediately if PR batch fails
+			p.Logger.Error("Failed to upsert pull request", "pr_id", string(pr.Id), "error", err) // Cast pr.Id
+			return err // Rollback triggered by defer
 		}
-	}
 
-	// Now that PRs are saved, save their commits and reviews
-	for _, pr := range prs {
-		// Save commits associated with the PR
+		// Save commits within the same transaction
 		if len(pr.Commits.Nodes) > 0 {
-			commitErr := p.SaveCommits(string(pr.Id), pr.Commits.Nodes)
+			commitErr := p.saveCommitsInTx(ctx, qtx, string(pr.Id), pr.Commits.Nodes) // Cast pr.Id
 			if commitErr != nil {
-				p.Logger.Error("can't save commits", "pr", pr.Id, "error", commitErr)
-				// Optionally aggregate errors instead of returning immediately
-				// For now, we log the error and continue with other PRs/reviews
+				// Error already logged in helper
+				return commitErr // Rollback
 			}
 		}
 
-		// Save reviews associated with the PR
+		// Save reviews within the same transaction
 		if len(pr.Reviews.Nodes) > 0 {
-			reviewErr := p.SavePullRequestReviews(string(pr.Id), pr.Reviews.Nodes)
+			reviewErr := p.savePullRequestReviewsInTx(ctx, qtx, string(pr.Id), pr.Reviews.Nodes) // Cast pr.Id
 			if reviewErr != nil {
-				p.Logger.Error("can't save pull request reviews", "pr", pr.Id, "error", reviewErr)
-				// Log and continue, or potentially return the first error encountered
-				// Assigning to the named return variable 'err' if we want to signal failure
-				if err == nil { // Keep the first error encountered
-					err = reviewErr
-				}
+				// Error already logged in helper
+				return reviewErr // Rollback
 			}
 		}
 	}
 
-	return // Return the potentially captured error from saving reviews/commits
+	return tx.Commit(ctx) // Commit transaction if all steps succeeded
 }
 
-// SavePullRequestReviews saves pull request reviews to the database.
-func (p *Postgres) SavePullRequestReviews(pullRequestID string, reviews []pullrequests.Review) (err error) {
-	if len(reviews) == 0 {
-		return nil // Nothing to save
-	}
 
-	batchUpdate := []map[string]interface{}{}
+// savePullRequestReviewsInTx saves reviews within an existing transaction using sqlc.
+// Note: This removes the duplicate SavePullRequest function above.
+func (p *Postgres) savePullRequestReviewsInTx(ctx context.Context, qtx *sqlc.Queries, pullRequestID string, reviews []pullrequests.Review) error {
 	for _, review := range reviews {
-		var submittedAt sql.NullString
-		if len(review.SubmittedAt) > 0 {
-			submittedAt = sql.NullString{String: string(review.SubmittedAt), Valid: true}
+		var submittedAt pgtype.Timestamptz
+		if review.SubmittedAt != "" {
+			t, parseErr := time.Parse(time.RFC3339, string(review.SubmittedAt))
+			if parseErr == nil {
+				submittedAt = pgtype.Timestamptz{Time: t, Valid: true}
+			} else {
+				p.Logger.Warn("Failed to parse review submitted_at", "review_id", review.Id, "value", review.SubmittedAt, "error", parseErr)
+			}
 		}
 
-		batchUpdate = append(batchUpdate, map[string]interface{}{
-			"id":              string(review.Id),
-			"pull_request_id": pullRequestID,
-			"author_login":    string(review.Author.Login),
-			"state":           string(review.State),
-			"body":            string(review.Body),
-			"url":             string(review.Url),
-			"submitted_at":    submittedAt,
-		})
-	}
-
-	// Use ON CONFLICT to update existing reviews if their state or body changes
-	query := `
-        INSERT INTO pull_request_reviews (id, pull_request_id, author_login, state, body, url, submitted_at)
-        VALUES (:id, :pull_request_id, :author_login, :state, :body, :url, :submitted_at)
-        ON CONFLICT (id) DO UPDATE SET
-            state = EXCLUDED.state,
-            body = EXCLUDED.body,
-            submitted_at = EXCLUDED.submitted_at,
-            updated_at = CURRENT_TIMESTAMP` // Rely on trigger or explicitly set here
-
-	// Chunk the batch update similar to SavePullRequest
-	// Calculate chunk size based on number of columns (7 in this case)
-	numCols := 7
-	chunkSize := (1<<15 - 1) / numCols // Roughly 65535 / 7 = ~9362
-
-	for _, vals := range slices.Collect(slices.Chunk(batchUpdate, chunkSize)) {
-		_, err = p.db.NamedExec(query, vals)
+		// Match the exact types from the generated UpsertPullRequestReviewParams struct
+		params := sqlc.UpsertPullRequestReviewParams{
+			ID:            string(review.Id), // Cast githubv4.String
+			PullRequestID: pullRequestID,
+			AuthorLogin:   sql.NullString{String: string(review.Author.Login), Valid: review.Author.Login != ""}, // sql.NullString
+			State:         pgtype.Text{String: string(review.State), Valid: review.State != ""},           // pgtype.Text
+			Body:          sql.NullString{String: string(review.Body), Valid: review.Body != ""},          // sql.NullString
+			Url:           sql.NullString{String: string(review.Url), Valid: review.Url != ""},             // sql.NullString
+			SubmittedAt:   submittedAt, // pgtype.Timestamptz
+		}
+		err := qtx.UpsertPullRequestReview(ctx, params)
 		if err != nil {
-			p.Logger.Error("can't insert/update pull request reviews", "error", err, "pull_request_id", pullRequestID)
-			// Consider returning the error immediately or aggregating errors
-			return err
+			p.Logger.Error("Failed to upsert pull request review", "review_id", string(review.Id), "pr_id", pullRequestID, "error", err) // Cast review.Id
+			return err // Propagate error to trigger rollback
 		}
 	}
-
 	return nil
 }
 
-func (p *Postgres) SaveCommits(pr_id string, commits []pullrequests.Commit) (err error) {
-	batchUpdate := []map[string]interface{}{}
+// saveCommitsInTx saves commits within an existing transaction using sqlc.
+func (p *Postgres) saveCommitsInTx(ctx context.Context, qtx *sqlc.Queries, prID string, commits []pullrequests.Commit) error {
 	for _, commit := range commits {
-		batchUpdate = append(batchUpdate, map[string]interface{}{
-			"id":      string(commit.Id),
-			"pr_id":   pr_id,
-			"message": commit.Commit.Message,
-		})
+		// Match the exact types from the generated InsertCommitParams struct
+		params := sqlc.InsertCommitParams{
+			ID:      string(commit.Id), // Cast githubv4.String
+			PrID:    prID,
+			Message: sql.NullString{String: string(commit.Commit.Message), Valid: commit.Commit.Message != ""}, // sql.NullString
+		}
+		err := qtx.InsertCommit(ctx, params)
+		if err != nil {
+			p.Logger.Error("Failed to insert commit", "commit_id", string(commit.Id), "pr_id", prID, "error", err) // Cast commit.Id
+			return err // Propagate error to trigger rollback
+		}
 	}
-
-	_, err = p.db.NamedExec(`INSERT INTO commits (id, pr_id, message)
-    VALUES (:id, :pr_id, :message) ON CONFLICT (id) DO NOTHING`, batchUpdate)
-	if err != nil {
-		p.Logger.Error("can't insert new commit", "error", err)
-		return
-	}
-	return
+	return nil
 }
 
-func (p *Postgres) GetAllRepos() ([]DBRepository, error) {
-	repos := []DBRepository{}
-	if err := p.db.Select(&repos, "SELECT * FROM repositories"); err != nil {
-		p.Logger.Error("can't fetch repositories", "error", err)
+// GetAllRepos retrieves all repositories using generated sqlc code.
+// NOTE: Return type uses the generated sqlc.Repository struct.
+func (p *Postgres) GetAllRepos(ctx context.Context) ([]sqlc.Repository, error) {
+	repos, err := p.queries.GetAllRepositories(ctx)
+	if err != nil {
+		p.Logger.Error("can't fetch all repositories", "error", err)
 		return nil, err
 	}
-
 	return repos, nil
 }
 
-func (p *Postgres) SaveTeams(teams map[string][]string) error {
-	p.db.MustExec("TRUNCATE teams")
-	for name, members := range teams {
-		batchUpdate := []map[string]interface{}{}
+// SaveTeams saves team memberships using generated sqlc code within a transaction.
+// NOTE: Changed signature to accept context.Context.
+func (p *Postgres) SaveTeams(ctx context.Context, teams map[string][]string) error {
+	tx, err := p.connPool.Begin(ctx)
+	if err != nil {
+		p.Logger.Error("Failed to begin transaction for saving teams", "error", err)
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := p.queries.WithTx(tx)
+
+	err = qtx.TruncateTeams(ctx)
+	if err != nil {
+		p.Logger.Error("Failed to truncate teams", "error", err)
+		return err
+	}
+
+	for teamName, members := range teams {
 		for _, member := range members {
-			batchUpdate = append(batchUpdate, map[string]interface{}{"team": name, "member": member})
-		}
-		_, err := p.db.NamedExec(`INSERT INTO teams (team, member)
-                              VALUES (:team, :member)`, batchUpdate)
-		if err != nil {
-			p.Logger.Error("can't insert new repository", "error", err)
-			return err
+			err = qtx.CreateTeamMember(ctx, sqlc.CreateTeamMemberParams{
+				Team:   teamName,
+				Member: member,
+			})
+			if err != nil {
+				p.Logger.Error("Failed to insert team member", "team", teamName, "member", member, "error", err)
+				return err // Rollback triggered by defer
+			}
 		}
 	}
 
-	return nil
+	return tx.Commit(ctx)
 }
 
-/**
-* Fetch the yesterday's pull requests
- */
+// FetchSecurityPullRequests retrieves specific PRs using generated sqlc code
+// and maps them to the SecurityPR struct to satisfy the Store interface.
+// NOTE: Signature matches Store interface now (no context, returns []SecurityPR).
 func (p *Postgres) FetchSecurityPullRequests() ([]SecurityPR, error) {
-	prs := []SecurityPR{}
-	err := p.db.Select(&prs, `select p.id, p.url, p.title, p.repository_name, p.repository_owner, p.author, p.additions, p.deletions, state, created_at, merged_at
-from teams t
-inner join prs p ON p.author = t.member
-where (created_at >= date_trunc('day', current_timestamp) - interval '1 day' and p.state = 'OPEN') or (merged_at >= date_trunc('day', current_timestamp) - interval '1 day' and p.state = 'MERGED')
-and t.team in ('pe-customer-journey', 'PE Platform Insights', 'Webstack', 'Omnibus', 'CSI', 'pe-platform-fleet', 'ie-deploy', 'P&E - Team Domino', 'Ares', 'RD-Edge', 'Golden', 'RD - Production Engineering', 'Security Engineering')
-group by p.id order by additions + deletions DESC`)
+	// Create a background context as the interface doesn't provide one
+	ctx := context.Background()
+
+	sqlcPRs, err := p.queries.FetchSecurityPullRequests(ctx)
 	if err != nil {
-		p.Logger.Error("can't fetch security pull requests", "error", err)
+		p.Logger.Error("can't fetch security pull requests using sqlc", "error", err)
 		return nil, err
 	}
+	// Removed duplicate "return nil, err"
+
+	// Map sqlc results to the SecurityPR struct (defined in base.go)
+	prs := make([]SecurityPR, 0, len(sqlcPRs))
+	for _, sp := range sqlcPRs {
+		// Map types correctly, assuming SecurityPR in base.go expects these types
+		// Use correct field names (lowercase id, url based on errors)
+		// MergedAt is pgtype.Timestamptz in both source and target, assign directly
+
+		secPR := SecurityPR{
+			Id:              sp.ID,                   // string
+			Url:             sp.Url.String,           // sql.NullString -> string
+			Title:           sp.Title.String,         // sql.NullString -> string
+			RepositoryName:  sp.RepositoryName.String, // pgtype.Text -> string
+			RepositoryOwner: sp.RepositoryOwner.String, // pgtype.Text -> string
+			Author:          sp.Author.String,        // pgtype.Text -> string
+			Additions:       int(sp.Additions.Int32), // pgtype.Int4 -> int
+			Deletions:       int(sp.Deletions.Int32), // pgtype.Int4 -> int
+			State:           sp.State.String,         // pgtype.Text -> string
+			CreatedAt:       sp.CreatedAt.Format(time.RFC3339), // time.Time -> string
+			MergedAt:        sp.MergedAt,             // pgtype.Timestamptz (assign directly)
+		}
+		// Add Valid checks from source if target fields are non-nullable ints/strings
+		// if sp.Additions.Valid { secPR.Additions = int(sp.Additions.Int32) } else { secPR.Additions = 0 } // Example
+
+		prs = append(prs, secPR)
+	}
+	// Removed duplicated block again (take 2)
 
 	return prs, nil
 }
+
+
+// Helper function removed as it likely exists in base.go and caused redeclaration error
+// func calculateOffset(page, limit int) int {
+// 	if page < 1 {
+// 		page = 1
+// 	}
+// 	return (page - 1) * limit
+// }
+
+
+// Interface satisfaction check commented out until Store interface is updated
+// var _ Store = (*Postgres)(nil)
