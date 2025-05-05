@@ -41,6 +41,14 @@ type Store interface {
 	FetchSecurityPullRequests() ([]SecurityPR, error) // Keep this signature as required
 	// Renamed and updated signature for prefix search
 	SearchDistinctTeamNamesByPrefix(ctx context.Context, prefix string) ([]string, error)
+
+	// New methods for team statistics
+	CountTeamCommitsByDateRange(ctx context.Context, arg sqlc.CountTeamCommitsByDateRangeParams) (int32, error)
+	GetTeamPullRequestStatsByDateRange(ctx context.Context, arg sqlc.GetTeamPullRequestStatsByDateRangeParams) (sqlc.GetTeamPullRequestStatsByDateRangeRow, error)
+
+	// New methods for listing pull requests
+	ListPullRequests(ctx context.Context, arg sqlc.ListPullRequestsParams) ([]sqlc.ListPullRequestsRow, error)
+	CountPullRequests(ctx context.Context, arg sqlc.CountPullRequestsParams) (int32, error)
 	// Removed duplicate Close()
 }
 

@@ -101,3 +101,71 @@ SELECT DISTINCT team
 FROM teams
 WHERE team ILIKE $1 || '%' -- Case-insensitive prefix search
 ORDER BY team;
+
+
+-- Team Statistics --
+
+-- name: CountTeamCommitsByDateRange :one
+SELECT COUNT(c.id)::int -- Cast to int for Go compatibility
+FROM commits c
+JOIN prs p ON c.pr_id = p.id
+JOIN teams t ON p.author = t.member
+WHERE t.team = $1
+  AND c.created_at >= $2 -- pgtype.Timestamptz
+  AND c.created_at <= $3; -- pgtype.Timestamptz
+
+-- name: GetTeamPullRequestStatsByDateRange :one
+SELECT
+    COUNT(CASE WHEN p.state = 'OPEN' AND p.created_at >= $2 AND p.created_at <= $3 THEN 1 END)::int AS open_count,
+    COUNT(CASE WHEN p.state = 'MERGED' AND p.merged_at >= $2 AND p.merged_at <= $3 THEN 1 END)::int AS merged_count,
+    -- Assuming 'CLOSED' is a state and filtering by created_at. Adjust if logic differs.
+    COUNT(CASE WHEN p.state = 'CLOSED' AND p.created_at >= $2 AND p.created_at <= $3 THEN 1 END)::int AS closed_count,
+    -- Count rollbacks: Merged PRs within the date range whose title starts with 'Revert '
+    COUNT(CASE WHEN p.state = 'MERGED' AND p.merged_at >= $2 AND p.merged_at <= $3 AND p.title LIKE 'Revert %' THEN 1 END)::int AS rollbacks_count
+FROM prs p
+JOIN teams t ON p.author = t.member
+WHERE t.team = $1
+  AND (
+       (p.state = 'OPEN' AND p.created_at >= $2 AND p.created_at <= $3) OR
+       (p.state = 'MERGED' AND p.merged_at >= $2 AND p.merged_at <= $3) OR
+       (p.state = 'CLOSED' AND p.created_at >= $2 AND p.created_at <= $3)
+      );
+
+
+-- List Pull Requests (Paginated & Searchable) --
+
+-- name: ListPullRequests :many
+SELECT
+    id,
+    repository_name,
+    title,
+    author,
+    state,
+    created_at,
+    merged_at,
+    -- closed_at column does not exist, state indicates closure
+    url
+FROM prs
+WHERE
+    created_at >= sqlc.arg(start_date)::timestamptz
+    AND created_at <= sqlc.arg(end_date)::timestamptz
+    AND (
+        sqlc.arg(search_term)::text = '' OR
+        title ILIKE '%' || sqlc.arg(search_term)::text || '%' OR
+        author ILIKE '%' || sqlc.arg(search_term)::text || '%'
+    )
+ORDER BY created_at DESC -- Or another relevant field like id
+LIMIT sqlc.arg(page_size)::int
+OFFSET sqlc.arg(offset_val)::int;
+
+-- name: CountPullRequests :one
+SELECT COUNT(*)::int
+FROM prs
+WHERE
+    created_at >= sqlc.arg(start_date)::timestamptz
+    AND created_at <= sqlc.arg(end_date)::timestamptz
+    AND (
+        sqlc.arg(search_term)::text = '' OR
+        title ILIKE '%' || sqlc.arg(search_term)::text || '%' OR
+        author ILIKE '%' || sqlc.arg(search_term)::text || '%'
+    );

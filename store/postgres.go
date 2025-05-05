@@ -440,3 +440,55 @@ func (p *Postgres) SearchDistinctTeamNamesByPrefix(ctx context.Context, prefix s
 	// The sqlc query returns []string directly.
 	return teamNames, nil
 }
+
+// CountTeamCommitsByDateRange implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) CountTeamCommitsByDateRange(ctx context.Context, arg sqlc.CountTeamCommitsByDateRangeParams) (int32, error) {
+	count, err := p.queries.CountTeamCommitsByDateRange(ctx, arg)
+	if err != nil {
+		p.Logger.Error("Failed to count team commits by date range", "team", arg.Team, "error", err)
+		return 0, err
+	}
+	return count, nil
+}
+
+// GetTeamPullRequestStatsByDateRange implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) GetTeamPullRequestStatsByDateRange(ctx context.Context, arg sqlc.GetTeamPullRequestStatsByDateRangeParams) (sqlc.GetTeamPullRequestStatsByDateRangeRow, error) {
+	stats, err := p.queries.GetTeamPullRequestStatsByDateRange(ctx, arg)
+	if err != nil {
+		// Handle pgx.ErrNoRows specifically if needed, otherwise log generic error
+		if err == pgx.ErrNoRows {
+			p.Logger.Info("No pull request stats found for team in date range", "team", arg.Team)
+			// Return zero stats instead of error if no rows is not considered an error state
+			return sqlc.GetTeamPullRequestStatsByDateRangeRow{}, nil
+		}
+		p.Logger.Error("Failed to get team pull request stats by date range", "team", arg.Team, "error", err)
+		return sqlc.GetTeamPullRequestStatsByDateRangeRow{}, err
+	}
+	return stats, nil
+}
+
+// ListPullRequests implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) ListPullRequests(ctx context.Context, arg sqlc.ListPullRequestsParams) ([]sqlc.ListPullRequestsRow, error) {
+	prs, err := p.queries.ListPullRequests(ctx, arg)
+	if err != nil {
+		// Handle pgx.ErrNoRows specifically if needed, otherwise log generic error
+		if err == pgx.ErrNoRows {
+			p.Logger.Info("No pull requests found matching criteria", "params", arg)
+			// Return empty slice instead of error if no rows is not considered an error state
+			return []sqlc.ListPullRequestsRow{}, nil
+		}
+		p.Logger.Error("Failed to list pull requests", "params", arg, "error", err)
+		return nil, err
+	}
+	return prs, nil
+}
+
+// CountPullRequests implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) CountPullRequests(ctx context.Context, arg sqlc.CountPullRequestsParams) (int32, error) {
+	count, err := p.queries.CountPullRequests(ctx, arg)
+	if err != nil {
+		p.Logger.Error("Failed to count pull requests", "params", arg, "error", err)
+		return 0, err
+	}
+	return count, nil
+}

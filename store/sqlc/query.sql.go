@@ -13,6 +13,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countPullRequests = `-- name: CountPullRequests :one
+SELECT COUNT(*)::int
+FROM prs
+WHERE
+    created_at >= $1::timestamptz
+    AND created_at <= $2::timestamptz
+    AND (
+        $3::text = '' OR
+        title ILIKE '%' || $3::text || '%' OR
+        author ILIKE '%' || $3::text || '%'
+    )
+`
+
+type CountPullRequestsParams struct {
+	StartDate  time.Time `db:"start_date"`
+	EndDate    time.Time `db:"end_date"`
+	SearchTerm string    `db:"search_term"`
+}
+
+func (q *Queries) CountPullRequests(ctx context.Context, arg CountPullRequestsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countPullRequests, arg.StartDate, arg.EndDate, arg.SearchTerm)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countRepositories = `-- name: CountRepositories :one
 
 SELECT count(*) FROM repositories
@@ -25,6 +51,31 @@ func (q *Queries) CountRepositories(ctx context.Context, dollar_1 string) (int64
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const countTeamCommitsByDateRange = `-- name: CountTeamCommitsByDateRange :one
+
+SELECT COUNT(c.id)::int -- Cast to int for Go compatibility
+FROM commits c
+JOIN prs p ON c.pr_id = p.id
+JOIN teams t ON p.author = t.member
+WHERE t.team = $1
+  AND c.created_at >= $2 -- pgtype.Timestamptz
+  AND c.created_at <= $3
+`
+
+type CountTeamCommitsByDateRangeParams struct {
+	Team        string             `db:"team"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at"`
+	CreatedAt_2 pgtype.Timestamptz `db:"created_at_2"`
+}
+
+// Team Statistics --
+func (q *Queries) CountTeamCommitsByDateRange(ctx context.Context, arg CountTeamCommitsByDateRangeParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countTeamCommitsByDateRange, arg.Team, arg.CreatedAt, arg.CreatedAt_2)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const createRepository = `-- name: CreateRepository :exec
@@ -170,6 +221,51 @@ func (q *Queries) GetLastPullRequestMergedDate(ctx context.Context, arg GetLastP
 	return merged_at, err
 }
 
+const getTeamPullRequestStatsByDateRange = `-- name: GetTeamPullRequestStatsByDateRange :one
+
+SELECT
+    COUNT(CASE WHEN p.state = 'OPEN' AND p.created_at >= $2 AND p.created_at <= $3 THEN 1 END)::int AS open_count,
+    COUNT(CASE WHEN p.state = 'MERGED' AND p.merged_at >= $2 AND p.merged_at <= $3 THEN 1 END)::int AS merged_count,
+    -- Assuming 'CLOSED' is a state and filtering by created_at. Adjust if logic differs.
+    COUNT(CASE WHEN p.state = 'CLOSED' AND p.created_at >= $2 AND p.created_at <= $3 THEN 1 END)::int AS closed_count,
+    -- Count rollbacks: Merged PRs within the date range whose title starts with 'Revert '
+    COUNT(CASE WHEN p.state = 'MERGED' AND p.merged_at >= $2 AND p.merged_at <= $3 AND p.title LIKE 'Revert %' THEN 1 END)::int AS rollbacks_count
+FROM prs p
+JOIN teams t ON p.author = t.member
+WHERE t.team = $1
+  AND (
+       (p.state = 'OPEN' AND p.created_at >= $2 AND p.created_at <= $3) OR
+       (p.state = 'MERGED' AND p.merged_at >= $2 AND p.merged_at <= $3) OR
+       (p.state = 'CLOSED' AND p.created_at >= $2 AND p.created_at <= $3)
+      )
+`
+
+type GetTeamPullRequestStatsByDateRangeParams struct {
+	Team        string    `db:"team"`
+	CreatedAt   time.Time `db:"created_at"`
+	CreatedAt_2 time.Time `db:"created_at_2"`
+}
+
+type GetTeamPullRequestStatsByDateRangeRow struct {
+	OpenCount      int32 `db:"open_count"`
+	MergedCount    int32 `db:"merged_count"`
+	ClosedCount    int32 `db:"closed_count"`
+	RollbacksCount int32 `db:"rollbacks_count"`
+}
+
+// pgtype.Timestamptz
+func (q *Queries) GetTeamPullRequestStatsByDateRange(ctx context.Context, arg GetTeamPullRequestStatsByDateRangeParams) (GetTeamPullRequestStatsByDateRangeRow, error) {
+	row := q.db.QueryRow(ctx, getTeamPullRequestStatsByDateRange, arg.Team, arg.CreatedAt, arg.CreatedAt_2)
+	var i GetTeamPullRequestStatsByDateRangeRow
+	err := row.Scan(
+		&i.OpenCount,
+		&i.MergedCount,
+		&i.ClosedCount,
+		&i.RollbacksCount,
+	)
+	return i, err
+}
+
 const insertCommit = `-- name: InsertCommit :exec
 
 INSERT INTO commits (id, pr_id, message, created_at)
@@ -193,6 +289,87 @@ func (q *Queries) InsertCommit(ctx context.Context, arg InsertCommitParams) erro
 		arg.CreatedAt,
 	)
 	return err
+}
+
+const listPullRequests = `-- name: ListPullRequests :many
+
+SELECT
+    id,
+    repository_name,
+    title,
+    author,
+    state,
+    created_at,
+    merged_at,
+    -- closed_at column does not exist, state indicates closure
+    url
+FROM prs
+WHERE
+    created_at >= $1::timestamptz
+    AND created_at <= $2::timestamptz
+    AND (
+        $3::text = '' OR
+        title ILIKE '%' || $3::text || '%' OR
+        author ILIKE '%' || $3::text || '%'
+    )
+ORDER BY created_at DESC -- Or another relevant field like id
+LIMIT $5::int
+OFFSET $4::int
+`
+
+type ListPullRequestsParams struct {
+	StartDate  time.Time `db:"start_date"`
+	EndDate    time.Time `db:"end_date"`
+	SearchTerm string    `db:"search_term"`
+	OffsetVal  int32     `db:"offset_val"`
+	PageSize   int32     `db:"page_size"`
+}
+
+type ListPullRequestsRow struct {
+	ID             string             `db:"id"`
+	RepositoryName pgtype.Text        `db:"repository_name"`
+	Title          sql.NullString     `db:"title"`
+	Author         pgtype.Text        `db:"author"`
+	State          pgtype.Text        `db:"state"`
+	CreatedAt      time.Time          `db:"created_at"`
+	MergedAt       pgtype.Timestamptz `db:"merged_at"`
+	Url            sql.NullString     `db:"url"`
+}
+
+// List Pull Requests (Paginated & Searchable) --
+func (q *Queries) ListPullRequests(ctx context.Context, arg ListPullRequestsParams) ([]ListPullRequestsRow, error) {
+	rows, err := q.db.Query(ctx, listPullRequests,
+		arg.StartDate,
+		arg.EndDate,
+		arg.SearchTerm,
+		arg.OffsetVal,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPullRequestsRow{}
+	for rows.Next() {
+		var i ListPullRequestsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RepositoryName,
+			&i.Title,
+			&i.Author,
+			&i.State,
+			&i.CreatedAt,
+			&i.MergedAt,
+			&i.Url,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listRepositories = `-- name: ListRepositories :many

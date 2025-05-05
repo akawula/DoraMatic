@@ -1,0 +1,277 @@
+openapi: 3.0.0
+info:
+  title: DoraMatic API
+  description: API for DoraMatic application, providing team statistics and other utilities.
+  version: 1.0.0
+servers:
+  - url: http://localhost:10000 # Adjust if your server runs elsewhere
+    description: Local development server
+
+paths:
+  /livez:
+    get:
+      summary: Liveness Probe
+      description: Checks if the service is running and ready to handle requests.
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is live
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+        '503':
+          description: Service is not available (e.g., DB connection issue - though current handler doesn't check DB)
+
+  /search/teams:
+    get:
+      summary: Search Team Names
+      description: Returns a list of distinct team names matching the provided prefix (case-insensitive).
+      tags:
+        - Teams
+      parameters:
+        - name: prefix
+          in: query
+          required: false
+          description: The prefix to search for team names. If omitted, might return all teams (behavior depends on handler implementation).
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of matching team names.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: ["Team Alpha", "Team Apple", "Team Artichoke"]
+        '500':
+          description: Internal server error (e.g., database query failed).
+
+  /teams/{teamName}/stats:
+    get:
+      summary: Get Team Statistics
+      description: Retrieves various statistics for a specific team within a given date range.
+      tags:
+        - Teams
+      parameters:
+        - name: teamName
+          in: path
+          required: true
+          description: The name of the team to retrieve statistics for.
+          schema:
+            type: string
+            example: Mesmeric
+        - name: start_date
+          in: query
+          required: true
+          description: The start date for the statistics period (inclusive), in RFC3339 format (e.g., 2025-04-28T00:00:00Z).
+          schema:
+            type: string
+            format: date-time
+            example: 2025-04-28T10:24:00Z
+        - name: end_date
+          in: query
+          required: true
+          description: The end date for the statistics period (inclusive), in RFC3339 format (e.g., 2025-05-05T23:59:59Z).
+          schema:
+            type: string
+            format: date-time
+            example: 2025-05-05T10:24:00Z
+      responses:
+        '200':
+          description: Successfully retrieved team statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamStatsResponse'
+        '400':
+          description: Bad Request - Missing or invalid parameters (teamName, start_date, end_date).
+        '500':
+          description: Internal server error (e.g., database query failed).
+
+  /prs:
+    get:
+      summary: List Pull Requests
+      description: Retrieves a paginated list of pull requests within a given date range, optionally filtered by a search term.
+      tags:
+        - Pull Requests
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          description: The start date for the period (inclusive), based on PR creation date, in RFC3339 format (e.g., 2025-04-28T00:00:00Z).
+          schema:
+            type: string
+            format: date-time
+            example: 2025-04-28T10:24:00Z
+        - name: end_date
+          in: query
+          required: true
+          description: The end date for the period (inclusive), based on PR creation date, in RFC3339 format (e.g., 2025-05-05T23:59:59Z).
+          schema:
+            type: string
+            format: date-time
+            example: 2025-05-05T10:24:00Z
+        - name: search
+          in: query
+          required: false
+          description: Optional search term to filter PRs by title or author.
+          schema:
+            type: string
+            example: "fix bug"
+        - name: page
+          in: query
+          required: false
+          description: Page number for pagination (defaults to 1).
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Number of items per page (defaults to 20).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100 # Example maximum page size
+            default: 20
+      responses:
+        '200':
+          description: Successfully retrieved pull requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullRequestListResponse'
+        '400':
+          description: Bad Request - Missing or invalid parameters.
+        '500':
+          description: Internal server error (e.g., database query failed).
+
+components:
+  schemas:
+    PullRequest:
+      type: object
+      description: Represents a single pull request.
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the pull request.
+          example: 12345
+        repo_name:
+          type: string
+          description: Name of the repository containing the PR.
+          example: "my-awesome-app"
+        number:
+          type: integer
+          description: Pull request number within the repository.
+          example: 101
+        title:
+          type: string
+          description: Title of the pull request.
+          example: "Fix: Correct handling of edge case"
+        author:
+          type: string
+          description: GitHub username of the PR author.
+          example: "octocat"
+        state:
+          type: string
+          description: Current state of the PR (e.g., open, closed, merged).
+          example: "merged"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the PR was created.
+          example: "2025-05-01T14:30:00Z"
+        merged_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the PR was merged (null if not merged).
+          example: "2025-05-02T09:15:00Z"
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the PR was closed (null if not closed or merged).
+          example: null
+        url:
+          type: string
+          format: url
+          description: URL to the pull request on GitHub.
+          example: "https://github.com/owner/repo/pull/101"
+      required:
+        - id
+        - repo_name
+        - number
+        - title
+        - author
+        - state
+        - created_at
+        - url
+
+    PullRequestListResponse:
+      type: object
+      description: Response containing a list of pull requests and pagination details.
+      properties:
+        pull_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/PullRequest'
+        total_count:
+          type: integer
+          description: Total number of pull requests matching the criteria (ignoring pagination).
+          example: 153
+        page:
+          type: integer
+          description: The current page number.
+          example: 1
+        page_size:
+          type: integer
+          description: The number of items per page.
+          example: 20
+      required:
+        - pull_requests
+        - total_count
+        - page
+        - page_size
+
+    TeamStatsResponse:
+      type: object
+      description: Statistics for a specific team over a period.
+      properties:
+        deployments_count:
+          type: integer
+          description: Count of PRs merged within the period (represents deployments).
+          example: 5
+        commits_count:
+          type: integer
+          description: Count of commits associated with the team's PRs created within the period.
+          example: 52
+        open_prs_count:
+          type: integer
+          description: Count of PRs created within the period that are still open.
+          example: 2
+        merged_prs_count:
+          type: integer
+          description: Count of PRs merged within the period.
+          example: 5
+        closed_prs_count:
+          type: integer
+          description: Count of PRs created within the period that were closed (not merged).
+          example: 1
+        rollbacks_count:
+          type: integer
+          description: Count of PRs merged within the period whose titles start with 'Revert '.
+          example: 0
+      required:
+        - deployments_count
+        - commits_count
+        - open_prs_count
+        - merged_prs_count
+        - closed_prs_count
+        - rollbacks_count

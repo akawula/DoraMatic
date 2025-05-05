@@ -62,9 +62,12 @@ func main() {
 	// --- End Database Connection Initialization ---
 
 	// Use handlers from the handlers package
-	http.HandleFunc("/livez", handlers.LivezHandler)
-	// Pass the database store to the handler factory
-	http.HandleFunc("/search/teams", handlers.SearchTeamsHandler(dbStore))
+	http.HandleFunc("GET /livez", handlers.LivezHandler) // Pass the function directly
+	http.HandleFunc("GET /search/teams", handlers.SearchTeamsHandler(dbStore))
+	// Register the team stats handler
+	http.HandleFunc("GET /teams/{teamName}/stats", handlers.GetTeamStatsHandler(dbStore))
+	// Register the new pull requests list handler
+	http.HandleFunc("GET /prs", handlers.GetPullRequests(logger, dbStore))
 
 	port := "10000" // Default port, can be overridden by env var later if needed
 	logger.Info("Server starting", "port", port) // Use structured logging

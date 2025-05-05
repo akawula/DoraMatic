@@ -12,16 +12,23 @@ import (
 )
 
 type Querier interface {
+	CountPullRequests(ctx context.Context, arg CountPullRequestsParams) (int32, error)
 	// Repositories --
 	CountRepositories(ctx context.Context, dollar_1 string) (int64, error)
+	// Team Statistics --
+	CountTeamCommitsByDateRange(ctx context.Context, arg CountTeamCommitsByDateRangeParams) (int32, error)
 	CreateRepository(ctx context.Context, arg CreateRepositoryParams) error
 	CreateTeamMember(ctx context.Context, arg CreateTeamMemberParams) error
 	FetchSecurityPullRequests(ctx context.Context) ([]FetchSecurityPullRequestsRow, error)
 	GetAllRepositories(ctx context.Context) ([]Repository, error)
 	// Pull Requests (prs) --
 	GetLastPullRequestMergedDate(ctx context.Context, arg GetLastPullRequestMergedDateParams) (pgtype.Timestamptz, error)
+	// pgtype.Timestamptz
+	GetTeamPullRequestStatsByDateRange(ctx context.Context, arg GetTeamPullRequestStatsByDateRangeParams) (GetTeamPullRequestStatsByDateRangeRow, error)
 	// Commits --
 	InsertCommit(ctx context.Context, arg InsertCommitParams) error
+	// List Pull Requests (Paginated & Searchable) --
+	ListPullRequests(ctx context.Context, arg ListPullRequestsParams) ([]ListPullRequestsRow, error)
 	// Use ILIKE for case-insensitive search, handle empty search string
 	ListRepositories(ctx context.Context, arg ListRepositoriesParams) ([]Repository, error)
 	SearchDistinctTeamNamesByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]string, error)

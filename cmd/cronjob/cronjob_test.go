@@ -41,13 +41,23 @@ type MockStore struct {
 	SavePullRequestFunc         func(ctx context.Context, prs []pullrequests.PullRequest) error
 	FetchSecurityPullRequestsFunc func() ([]store.SecurityPR, error)
 	CloseFunc                   func()
+	// New methods for team stats
+	CountTeamCommitsByDateRangeFunc      func(ctx context.Context, arg sqlc.CountTeamCommitsByDateRangeParams) (int32, error)
+	GetTeamPullRequestStatsByDateRangeFunc func(ctx context.Context, arg sqlc.GetTeamPullRequestStatsByDateRangeParams) (sqlc.GetTeamPullRequestStatsByDateRangeRow, error)
+	// New methods for listing PRs
+	ListPullRequestsFunc                 func(ctx context.Context, arg sqlc.ListPullRequestsParams) ([]sqlc.ListPullRequestsRow, error)
+	CountPullRequestsFunc                func(ctx context.Context, arg sqlc.CountPullRequestsParams) (int32, error)
 
 	// Add fields to track calls if needed
-	SaveTeamsCalled               bool
-	GetLastPRDateCalledWith       [][2]string // Store org/repo pairs
-	SavePullRequestCalled         bool
-	FetchSecurityPullRequestsCalled bool
-	CloseCalled                   bool
+	SaveTeamsCalled                      bool
+	GetLastPRDateCalledWith              [][2]string // Store org/repo pairs
+	SavePullRequestCalled                bool
+	FetchSecurityPullRequestsCalled      bool
+	CloseCalled                          bool
+	CountTeamCommitsByDateRangeCalled    bool
+	GetTeamPullRequestStatsByDateRangeCalled bool
+	ListPullRequestsCalled               bool
+	CountPullRequestsCalled              bool
 }
 
 // Updated SaveTeams method signature
@@ -96,6 +106,44 @@ func (m *MockStore) GetRepos(ctx context.Context, page int, search string) ([]sq
 }
 func (m *MockStore) SaveRepos(ctx context.Context, repos []repositories.Repository) error { return nil }
 func (m *MockStore) GetAllRepos(ctx context.Context) ([]sqlc.Repository, error)         { return nil, nil }
+func (m *MockStore) SearchDistinctTeamNamesByPrefix(ctx context.Context, prefix string) ([]string, error) {
+	return nil, nil
+}
+
+// Implement new store methods for team stats
+func (m *MockStore) CountTeamCommitsByDateRange(ctx context.Context, arg sqlc.CountTeamCommitsByDateRangeParams) (int32, error) {
+	m.CountTeamCommitsByDateRangeCalled = true // Keep tracking flag
+	if m.CountTeamCommitsByDateRangeFunc != nil {
+		return m.CountTeamCommitsByDateRangeFunc(ctx, arg)
+	}
+	return 0, nil // Default mock behavior
+}
+
+func (m *MockStore) GetTeamPullRequestStatsByDateRange(ctx context.Context, arg sqlc.GetTeamPullRequestStatsByDateRangeParams) (sqlc.GetTeamPullRequestStatsByDateRangeRow, error) {
+	m.GetTeamPullRequestStatsByDateRangeCalled = true
+	if m.GetTeamPullRequestStatsByDateRangeFunc != nil {
+		return m.GetTeamPullRequestStatsByDateRangeFunc(ctx, arg)
+	}
+	// Default mock behavior returns zero values for the struct
+	return sqlc.GetTeamPullRequestStatsByDateRangeRow{}, nil
+}
+
+// Implement new store methods for listing PRs
+func (m *MockStore) ListPullRequests(ctx context.Context, arg sqlc.ListPullRequestsParams) ([]sqlc.ListPullRequestsRow, error) {
+	m.ListPullRequestsCalled = true
+	if m.ListPullRequestsFunc != nil {
+		return m.ListPullRequestsFunc(ctx, arg)
+	}
+	return []sqlc.ListPullRequestsRow{}, nil // Default mock behavior
+}
+
+func (m *MockStore) CountPullRequests(ctx context.Context, arg sqlc.CountPullRequestsParams) (int32, error) {
+	m.CountPullRequestsCalled = true
+	if m.CountPullRequestsFunc != nil {
+		return m.CountPullRequestsFunc(ctx, arg)
+	}
+	return 0, nil // Default mock behavior
+}
 
 // Mock function types for GitHub interactions
 // Updated MockGetTeamsFunc signature
