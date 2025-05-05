@@ -95,3 +95,9 @@ AND t.team IN (
 )
 GROUP BY p.id
 ORDER BY p.additions + p.deletions DESC;
+
+-- name: SearchDistinctTeamNamesByPrefix :many
+SELECT DISTINCT team
+FROM teams
+WHERE team ILIKE $1 || '%' -- Case-insensitive prefix search
+ORDER BY team;

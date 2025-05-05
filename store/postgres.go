@@ -427,3 +427,16 @@ func (p *Postgres) FetchSecurityPullRequests() ([]SecurityPR, error) {
 
 	return prs, nil
 }
+
+// SearchDistinctTeamNamesByPrefix retrieves a sorted list of unique team names matching the prefix.
+func (p *Postgres) SearchDistinctTeamNamesByPrefix(ctx context.Context, prefix string) ([]string, error) {
+	// Wrap the prefix in sql.NullString as expected by the generated SQLC function
+	sqlPrefix := sql.NullString{String: prefix, Valid: prefix != ""}
+	teamNames, err := p.queries.SearchDistinctTeamNamesByPrefix(ctx, sqlPrefix)
+	if err != nil {
+		p.Logger.Error("Failed to search distinct team names by prefix", "prefix", prefix, "error", err)
+		return nil, err
+	}
+	// The sqlc query returns []string directly.
+	return teamNames, nil
+}

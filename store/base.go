@@ -39,6 +39,8 @@ type Store interface {
 	// Changed SaveTeams parameter type to include MemberInfo
 	SaveTeams(ctx context.Context, teams map[string][]organizations.MemberInfo) error
 	FetchSecurityPullRequests() ([]SecurityPR, error) // Keep this signature as required
+	// Renamed and updated signature for prefix search
+	SearchDistinctTeamNamesByPrefix(ctx context.Context, prefix string) ([]string, error)
 	// Removed duplicate Close()
 }
 

@@ -5,10 +5,16 @@ default: run-cron
 build-cron:
 	GOARCH=amd64 GOOS=darwin go build -o app/cron cmd/cronjob/cronjob.go
 
-build: build-cron
+build-server:
+	GOARCH=amd64 GOOS=darwin go build -o app/server cmd/server/server.go
+
+build: build-cron build-server
 
 run-cron: clean build-cron
 	DEBUG=1 ./app/cron
+
+run-server: clean build-server
+	./app/server
 
 clean:
 	rm -rf ./app

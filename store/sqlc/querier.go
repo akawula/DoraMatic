@@ -6,6 +6,7 @@ package sqlc
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -23,6 +24,7 @@ type Querier interface {
 	InsertCommit(ctx context.Context, arg InsertCommitParams) error
 	// Use ILIKE for case-insensitive search, handle empty search string
 	ListRepositories(ctx context.Context, arg ListRepositoriesParams) ([]Repository, error)
+	SearchDistinctTeamNamesByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]string, error)
 	TruncateRepositories(ctx context.Context) error
 	// Teams --
 	TruncateTeams(ctx context.Context) error

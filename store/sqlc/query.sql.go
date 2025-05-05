@@ -229,6 +229,33 @@ func (q *Queries) ListRepositories(ctx context.Context, arg ListRepositoriesPara
 	return items, nil
 }
 
+const searchDistinctTeamNamesByPrefix = `-- name: SearchDistinctTeamNamesByPrefix :many
+SELECT DISTINCT team
+FROM teams
+WHERE team ILIKE $1 || '%' -- Case-insensitive prefix search
+ORDER BY team
+`
+
+func (q *Queries) SearchDistinctTeamNamesByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]string, error) {
+	rows, err := q.db.Query(ctx, searchDistinctTeamNamesByPrefix, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var team string
+		if err := rows.Scan(&team); err != nil {
+			return nil, err
+		}
+		items = append(items, team)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const truncateRepositories = `-- name: TruncateRepositories :exec
 TRUNCATE TABLE repositories
 `
