@@ -10,6 +10,7 @@ import (
 	// "slices" // No longer needed directly in this file after refactor
 	"time"
 
+	"github.com/akawula/DoraMatic/github/organizations" // Import organizations package
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
 	"github.com/akawula/DoraMatic/store/sqlc" // Import the generated package
@@ -31,7 +32,6 @@ import (
 // }
 
 // SecurityPR struct definition removed, assume it's in base.go
-
 
 type Postgres struct {
 	connPool *pgxpool.Pool // Use pgx connection pool
@@ -69,7 +69,7 @@ func (p *Postgres) Close() {
 // GetRepos retrieves repositories using generated sqlc code.
 // NOTE: Return type uses the generated sqlc.Repository struct.
 func (p *Postgres) GetRepos(ctx context.Context, page int, search string) ([]sqlc.Repository, int, error) {
-	limit := int32(20) // sqlc uses specific int types
+	limit := int32(20)                                 // sqlc uses specific int types
 	offset := int32(calculateOffset(page, int(limit))) // Assumes calculateOffset is accessible
 
 	p.Logger.Debug("Fetching repositories", "search", search, "limit", limit, "offset", offset)
@@ -127,8 +127,8 @@ func (p *Postgres) SaveRepos(ctx context.Context, repos []repositories.Repositor
 		}
 		err = qtx.CreateRepository(ctx, sqlc.CreateRepositoryParams{
 			Org:      string(repo.Owner.Login), // Cast githubv4.String
-			Slug:     string(repo.Name),      // Cast githubv4.String
-			Language: lang,                   // Pass pgtype.Text
+			Slug:     string(repo.Name),        // Cast githubv4.String
+			Language: lang,                     // Pass pgtype.Text
 		})
 		if err != nil {
 			p.Logger.Error("Failed to insert repository", "repo", repo.Name, "error", err)
@@ -173,7 +173,6 @@ func (p *Postgres) GetLastPRDate(ctx context.Context, org string, repo string) t
 	return defaultTime
 }
 
-
 // SavePullRequest saves pull requests and their associated commits/reviews using sqlc within a transaction.
 // NOTE: Changed signature to accept context.Context.
 func (p *Postgres) SavePullRequest(ctx context.Context, prs []pullrequests.PullRequest) (err error) {
@@ -216,7 +215,7 @@ func (p *Postgres) SavePullRequest(ctx context.Context, prs []pullrequests.PullR
 		createdAt, parseErr := time.Parse(time.RFC3339, string(pr.CreatedAt)) // Cast githubv4.String
 		if parseErr != nil {
 			p.Logger.Error("Failed to parse created_at, skipping PR", "pr_id", string(pr.Id), "value", string(pr.CreatedAt), "error", parseErr) // Cast Id and CreatedAt for logging
-			continue // Skip this PR if created_at is invalid
+			continue                                                                                                                            // Skip this PR if created_at is invalid
 		}
 		pgCreatedAt := pgtype.Timestamptz{Time: createdAt, Valid: true} // Assuming CreatedAt is non-nullable
 
@@ -224,26 +223,26 @@ func (p *Postgres) SavePullRequest(ctx context.Context, prs []pullrequests.PullR
 		// Or keep pgtype if that's accurate after regeneration check (let's keep pgtype for now)
 		// Match the exact types from the generated UpsertPullRequestParams struct
 		params := sqlc.UpsertPullRequestParams{
-			ID:                string(pr.Id), // Cast githubv4.String
-			Title:             sql.NullString{String: string(pr.Title), Valid: pr.Title != ""},      // sql.NullString
-			State:             pgtype.Text{String: string(pr.State), Valid: pr.State != ""},           // pgtype.Text
-			Url:               sql.NullString{String: string(pr.Url), Valid: pr.Url != ""},          // sql.NullString
-			MergedAt:          mergedAt,    // pgtype.Timestamptz
-			CreatedAt:         pgCreatedAt.Time, // time.Time
-			Additions:         pgtype.Int4{Int32: int32(pr.Additions), Valid: true},         // pgtype.Int4
-			Deletions:         pgtype.Int4{Int32: int32(pr.Deletions), Valid: true},         // pgtype.Int4
-			BranchName:        sql.NullString{String: string(pr.HeadRefName), Valid: pr.HeadRefName != ""}, // sql.NullString
-			Author:            pgtype.Text{String: string(pr.Author.Login), Valid: pr.Author.Login != ""}, // pgtype.Text
-			RepositoryName:    pgtype.Text{String: string(pr.Repository.Name), Valid: pr.Repository.Name != ""}, // pgtype.Text
+			ID:                string(pr.Id),                                                                                  // Cast githubv4.String
+			Title:             sql.NullString{String: string(pr.Title), Valid: pr.Title != ""},                                // sql.NullString
+			State:             pgtype.Text{String: string(pr.State), Valid: pr.State != ""},                                   // pgtype.Text
+			Url:               sql.NullString{String: string(pr.Url), Valid: pr.Url != ""},                                    // sql.NullString
+			MergedAt:          mergedAt,                                                                                       // pgtype.Timestamptz
+			CreatedAt:         pgCreatedAt.Time,                                                                               // time.Time
+			Additions:         pgtype.Int4{Int32: int32(pr.Additions), Valid: true},                                           // pgtype.Int4
+			Deletions:         pgtype.Int4{Int32: int32(pr.Deletions), Valid: true},                                           // pgtype.Int4
+			BranchName:        sql.NullString{String: string(pr.HeadRefName), Valid: pr.HeadRefName != ""},                    // sql.NullString
+			Author:            pgtype.Text{String: string(pr.Author.Login), Valid: pr.Author.Login != ""},                     // pgtype.Text
+			RepositoryName:    pgtype.Text{String: string(pr.Repository.Name), Valid: pr.Repository.Name != ""},               // pgtype.Text
 			RepositoryOwner:   pgtype.Text{String: string(pr.Repository.Owner.Login), Valid: pr.Repository.Owner.Login != ""}, // pgtype.Text
-			ReviewsRequested:  pgtype.Int4{Int32: int32(pr.TimelineItems.TotalCount), Valid: true}, // pgtype.Int4
-			ReviewRequestedAt: reviewAt, // pgtype.Timestamptz
+			ReviewsRequested:  pgtype.Int4{Int32: int32(pr.TimelineItems.TotalCount), Valid: true},                            // pgtype.Int4
+			ReviewRequestedAt: reviewAt,                                                                                       // pgtype.Timestamptz
 		}
 
 		err = qtx.UpsertPullRequest(ctx, params)
 		if err != nil {
 			p.Logger.Error("Failed to upsert pull request", "pr_id", string(pr.Id), "error", err) // Cast pr.Id
-			return err // Rollback triggered by defer
+			return err                                                                            // Rollback triggered by defer
 		}
 
 		// Save commits within the same transaction
@@ -268,7 +267,6 @@ func (p *Postgres) SavePullRequest(ctx context.Context, prs []pullrequests.PullR
 	return tx.Commit(ctx) // Commit transaction if all steps succeeded
 }
 
-
 // savePullRequestReviewsInTx saves reviews within an existing transaction using sqlc.
 // Note: This removes the duplicate SavePullRequest function above.
 func (p *Postgres) savePullRequestReviewsInTx(ctx context.Context, qtx *sqlc.Queries, pullRequestID string, reviews []pullrequests.Review) error {
@@ -288,15 +286,15 @@ func (p *Postgres) savePullRequestReviewsInTx(ctx context.Context, qtx *sqlc.Que
 			ID:            string(review.Id), // Cast githubv4.String
 			PullRequestID: pullRequestID,
 			AuthorLogin:   sql.NullString{String: string(review.Author.Login), Valid: review.Author.Login != ""}, // sql.NullString
-			State:         pgtype.Text{String: string(review.State), Valid: review.State != ""},           // pgtype.Text
-			Body:          sql.NullString{String: string(review.Body), Valid: review.Body != ""},          // sql.NullString
-			Url:           sql.NullString{String: string(review.Url), Valid: review.Url != ""},             // sql.NullString
-			SubmittedAt:   submittedAt, // pgtype.Timestamptz
+			State:         pgtype.Text{String: string(review.State), Valid: review.State != ""},                  // pgtype.Text
+			Body:          sql.NullString{String: string(review.Body), Valid: review.Body != ""},                 // sql.NullString
+			Url:           sql.NullString{String: string(review.Url), Valid: review.Url != ""},                   // sql.NullString
+			SubmittedAt:   submittedAt,                                                                           // pgtype.Timestamptz
 		}
 		err := qtx.UpsertPullRequestReview(ctx, params)
 		if err != nil {
 			p.Logger.Error("Failed to upsert pull request review", "review_id", string(review.Id), "pr_id", pullRequestID, "error", err) // Cast review.Id
-			return err // Propagate error to trigger rollback
+			return err                                                                                                                   // Propagate error to trigger rollback
 		}
 	}
 	return nil
@@ -305,16 +303,32 @@ func (p *Postgres) savePullRequestReviewsInTx(ctx context.Context, qtx *sqlc.Que
 // saveCommitsInTx saves commits within an existing transaction using sqlc.
 func (p *Postgres) saveCommitsInTx(ctx context.Context, qtx *sqlc.Queries, prID string, commits []pullrequests.Commit) error {
 	for _, commit := range commits {
+		// Parse the commit date
+		var createdAt pgtype.Timestamptz
+		if commit.Commit.CommittedDate != "" {
+			t, parseErr := time.Parse(time.RFC3339, string(commit.Commit.CommittedDate))
+			if parseErr == nil {
+				createdAt = pgtype.Timestamptz{Time: t, Valid: true}
+			} else {
+				p.Logger.Warn("Failed to parse commit CommittedDate", "commit_id", string(commit.Id), "value", commit.Commit.CommittedDate, "error", parseErr)
+				// Decide if we should skip or insert with NULL date? Let's insert with NULL for now.
+				createdAt = pgtype.Timestamptz{Valid: false}
+			}
+		} else {
+			createdAt = pgtype.Timestamptz{Valid: false} // Set as invalid if the string is empty
+		}
+
 		// Match the exact types from the generated InsertCommitParams struct
 		params := sqlc.InsertCommitParams{
-			ID:      string(commit.Id), // Cast githubv4.String
-			PrID:    prID,
-			Message: sql.NullString{String: string(commit.Commit.Message), Valid: commit.Commit.Message != ""}, // sql.NullString
+			ID:        string(commit.Id), // Cast githubv4.String
+			PrID:      prID,
+			Message:   sql.NullString{String: string(commit.Commit.Message), Valid: commit.Commit.Message != ""}, // sql.NullString
+			CreatedAt: createdAt,                                                                                 // Add the parsed created_at timestamp
 		}
 		err := qtx.InsertCommit(ctx, params)
 		if err != nil {
 			p.Logger.Error("Failed to insert commit", "commit_id", string(commit.Id), "pr_id", prID, "error", err) // Cast commit.Id
-			return err // Propagate error to trigger rollback
+			return err                                                                                             // Propagate error to trigger rollback
 		}
 	}
 	return nil
@@ -331,9 +345,9 @@ func (p *Postgres) GetAllRepos(ctx context.Context) ([]sqlc.Repository, error) {
 	return repos, nil
 }
 
-// SaveTeams saves team memberships using generated sqlc code within a transaction.
-// NOTE: Changed signature to accept context.Context.
-func (p *Postgres) SaveTeams(ctx context.Context, teams map[string][]string) error {
+// SaveTeams saves team memberships (including avatar URL) using generated sqlc code within a transaction.
+// NOTE: Updated signature to accept map[string][]organizations.MemberInfo.
+func (p *Postgres) SaveTeams(ctx context.Context, teams map[string][]organizations.MemberInfo) error {
 	tx, err := p.connPool.Begin(ctx)
 	if err != nil {
 		p.Logger.Error("Failed to begin transaction for saving teams", "error", err)
@@ -350,13 +364,18 @@ func (p *Postgres) SaveTeams(ctx context.Context, teams map[string][]string) err
 	}
 
 	for teamName, members := range teams {
-		for _, member := range members {
+		for _, memberInfo := range members { // Iterate over MemberInfo struct
+			// Prepare params for CreateTeamMember, including avatar_url
+			// Assuming avatar_url is nullable TEXT in DB, use sql.NullString
+			avatarURL := sql.NullString{String: memberInfo.AvatarUrl, Valid: memberInfo.AvatarUrl != ""}
+
 			err = qtx.CreateTeamMember(ctx, sqlc.CreateTeamMemberParams{
-				Team:   teamName,
-				Member: member,
+				Team:      teamName,
+				Member:    memberInfo.Login, // Use Login from MemberInfo
+				AvatarUrl: avatarURL,        // Pass the avatar URL
 			})
 			if err != nil {
-				p.Logger.Error("Failed to insert team member", "team", teamName, "member", member, "error", err)
+				p.Logger.Error("Failed to insert team member", "team", teamName, "member", memberInfo.Login, "error", err)
 				return err // Rollback triggered by defer
 			}
 		}
@@ -387,17 +406,17 @@ func (p *Postgres) FetchSecurityPullRequests() ([]SecurityPR, error) {
 		// MergedAt is pgtype.Timestamptz in both source and target, assign directly
 
 		secPR := SecurityPR{
-			Id:              sp.ID,                   // string
-			Url:             sp.Url.String,           // sql.NullString -> string
-			Title:           sp.Title.String,         // sql.NullString -> string
-			RepositoryName:  sp.RepositoryName.String, // pgtype.Text -> string
-			RepositoryOwner: sp.RepositoryOwner.String, // pgtype.Text -> string
-			Author:          sp.Author.String,        // pgtype.Text -> string
-			Additions:       int(sp.Additions.Int32), // pgtype.Int4 -> int
-			Deletions:       int(sp.Deletions.Int32), // pgtype.Int4 -> int
-			State:           sp.State.String,         // pgtype.Text -> string
+			Id:              sp.ID,                             // string
+			Url:             sp.Url.String,                     // sql.NullString -> string
+			Title:           sp.Title.String,                   // sql.NullString -> string
+			RepositoryName:  sp.RepositoryName.String,          // pgtype.Text -> string
+			RepositoryOwner: sp.RepositoryOwner.String,         // pgtype.Text -> string
+			Author:          sp.Author.String,                  // pgtype.Text -> string
+			Additions:       int(sp.Additions.Int32),           // pgtype.Int4 -> int
+			Deletions:       int(sp.Deletions.Int32),           // pgtype.Int4 -> int
+			State:           sp.State.String,                   // pgtype.Text -> string
 			CreatedAt:       sp.CreatedAt.Format(time.RFC3339), // time.Time -> string
-			MergedAt:        sp.MergedAt,             // pgtype.Timestamptz (assign directly)
+			MergedAt:        sp.MergedAt,                       // pgtype.Timestamptz (assign directly)
 		}
 		// Add Valid checks from source if target fields are non-nullable ints/strings
 		// if sp.Additions.Valid { secPR.Additions = int(sp.Additions.Int32) } else { secPR.Additions = 0 } // Example
@@ -408,16 +427,3 @@ func (p *Postgres) FetchSecurityPullRequests() ([]SecurityPR, error) {
 
 	return prs, nil
 }
-
-
-// Helper function removed as it likely exists in base.go and caused redeclaration error
-// func calculateOffset(page, limit int) int {
-// 	if page < 1 {
-// 		page = 1
-// 	}
-// 	return (page - 1) * limit
-// }
-
-
-// Interface satisfaction check commented out until Store interface is updated
-// var _ Store = (*Postgres)(nil)

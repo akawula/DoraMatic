@@ -6,6 +6,7 @@ import (
 	// "fmt" // Remove unused import
 	"time"
 
+	"github.com/akawula/DoraMatic/github/organizations" // Import organizations package
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
 	"github.com/akawula/DoraMatic/store/sqlc" // Import sqlc package
@@ -32,12 +33,13 @@ type Store interface {
 	// Updated signatures to include context and use sqlc types
 	GetRepos(ctx context.Context, page int, search string) ([]sqlc.Repository, int, error)
 	SaveRepos(ctx context.Context, repos []repositories.Repository) error
+	GetAllRepos(ctx context.Context) ([]sqlc.Repository, error) // Added for convenience if needed
 	GetLastPRDate(ctx context.Context, org string, repo string) time.Time
-	SavePullRequest(ctx context.Context, prs []pullrequests.PullRequest) (err error)
-	GetAllRepos(ctx context.Context) ([]sqlc.Repository, error)
-	SaveTeams(ctx context.Context, teams map[string][]string) error
-	// FetchSecurityPullRequests signature remains the same (no context, returns []SecurityPR)
-	FetchSecurityPullRequests() ([]SecurityPR, error)
+	SavePullRequest(ctx context.Context, prs []pullrequests.PullRequest) error
+	// Changed SaveTeams parameter type to include MemberInfo
+	SaveTeams(ctx context.Context, teams map[string][]organizations.MemberInfo) error
+	FetchSecurityPullRequests() ([]SecurityPR, error) // Keep this signature as required
+	// Removed duplicate Close()
 }
 
 // getQueryRepos is no longer used by postgres.go after sqlc refactor

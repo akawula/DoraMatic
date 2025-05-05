@@ -44,17 +44,18 @@ func (q *Queries) CreateRepository(ctx context.Context, arg CreateRepositoryPara
 }
 
 const createTeamMember = `-- name: CreateTeamMember :exec
-INSERT INTO teams (team, member)
-VALUES ($1, $2)
+INSERT INTO teams (team, member, avatar_url)
+VALUES ($1, $2, $3)
 `
 
 type CreateTeamMemberParams struct {
-	Team   string `db:"team"`
-	Member string `db:"member"`
+	Team      string         `db:"team"`
+	Member    string         `db:"member"`
+	AvatarUrl sql.NullString `db:"avatar_url"`
 }
 
 func (q *Queries) CreateTeamMember(ctx context.Context, arg CreateTeamMemberParams) error {
-	_, err := q.db.Exec(ctx, createTeamMember, arg.Team, arg.Member)
+	_, err := q.db.Exec(ctx, createTeamMember, arg.Team, arg.Member, arg.AvatarUrl)
 	return err
 }
 
@@ -171,20 +172,26 @@ func (q *Queries) GetLastPullRequestMergedDate(ctx context.Context, arg GetLastP
 
 const insertCommit = `-- name: InsertCommit :exec
 
-INSERT INTO commits (id, pr_id, message)
-VALUES ($1, $2, $3)
+INSERT INTO commits (id, pr_id, message, created_at)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (id) DO NOTHING
 `
 
 type InsertCommitParams struct {
-	ID      string         `db:"id"`
-	PrID    string         `db:"pr_id"`
-	Message sql.NullString `db:"message"`
+	ID        string             `db:"id"`
+	PrID      string             `db:"pr_id"`
+	Message   sql.NullString     `db:"message"`
+	CreatedAt pgtype.Timestamptz `db:"created_at"`
 }
 
 // Commits --
 func (q *Queries) InsertCommit(ctx context.Context, arg InsertCommitParams) error {
-	_, err := q.db.Exec(ctx, insertCommit, arg.ID, arg.PrID, arg.Message)
+	_, err := q.db.Exec(ctx, insertCommit,
+		arg.ID,
+		arg.PrID,
+		arg.Message,
+		arg.CreatedAt,
+	)
 	return err
 }
 

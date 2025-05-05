@@ -13,7 +13,8 @@ import (
 type Commit struct {
 	Id     githubv4.String
 	Commit struct {
-		Message githubv4.String
+		Message       githubv4.String
+		CommittedDate githubv4.String // Added commit date
 	}
 }
 
@@ -38,6 +39,7 @@ type PullRequest struct {
 	CreatedAt   githubv4.String
 	Additions   githubv4.Int
 	Deletions   githubv4.Int
+	
 	HeadRefName githubv4.String
 	Author      struct {
 		AvatarUrl githubv4.String
@@ -45,9 +47,9 @@ type PullRequest struct {
 	}
 	Repository repositories.Repository
 	Commits    struct {
-		Nodes      []Commit
+		Nodes      []Commit // Now includes CommittedDate
 		TotalCount githubv4.Int
-	} `graphql:"commits(first: 50)"`
+	} `graphql:"commits(first: 50)"` // Corrected query - fields inferred from struct
 	TimelineItems struct {
 		Nodes []struct {
 			ReviewRequestedEventFragment struct {

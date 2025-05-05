@@ -16,12 +16,14 @@ var teamQuery struct { // Renamed query variable to avoid conflict
 					Name    githubv4.String
 					Members struct {
 						Nodes []struct {
-							Login githubv4.String
+							Login     githubv4.String
+							AvatarUrl githubv4.String // Added AvatarUrl field
 						}
 						PageInfo struct {
 							HasNextPage githubv4.Boolean
 							EndCursor   githubv4.String
 						}
+						// Corrected GraphQL query tag - fields are inferred from struct
 					} `graphql:"members(first:100, after: $membersAfter)"`
 				}
 				PageInfo struct {
@@ -33,20 +35,27 @@ var teamQuery struct { // Renamed query variable to avoid conflict
 	}
 }
 
-// GetTeams fetches teams for all organizations using the provided GitHubV4Client.
-func GetTeams(ghClient client.GitHubV4Client) (map[string][]string, error) {
+// MemberInfo holds login and avatar URL.
+type MemberInfo struct {
+	Login     string
+	AvatarUrl string
+}
+
+// GetTeams fetches teams and members (including avatar URL) for all organizations.
+// Return type changed to map[string][]MemberInfo.
+func GetTeams(ghClient client.GitHubV4Client) (map[string][]MemberInfo, error) {
 	// Pass ghClient to organizations.Get
 	orgs, err := Get(ghClient)
 	if err != nil {
 		return nil, err
 	}
 
-	results := map[string][]string{}
+	results := make(map[string][]MemberInfo) // Changed value type
 	for _, org := range orgs {
 		// Pass ghClient to getTeam
-		team, err := getTeam(ghClient, org)
+		team, err := getTeam(ghClient, org) // getTeam now returns map[string][]MemberInfo
 		if err != nil {
-			return nil, err
+			return nil, err // TODO: Consider logging and continuing?
 		}
 		maps.Copy(results, team)
 	}
@@ -54,12 +63,13 @@ func GetTeams(ghClient client.GitHubV4Client) (map[string][]string, error) {
 	return results, nil
 }
 
-// getTeam fetches teams for a specific organization using the provided GitHubV4Client.
-func getTeam(ghClient client.GitHubV4Client, org string) (map[string][]string, error) {
+// getTeam fetches teams and members (including avatar URL) for a specific organization.
+// Return type changed to map[string][]MemberInfo.
+func getTeam(ghClient client.GitHubV4Client, org string) (map[string][]MemberInfo, error) {
 	// Removed internal client creation, use ghClient
 	variables := map[string]interface{}{"organization": githubv4.String(org), "teamsAfter": (*githubv4.String)(nil), "membersAfter": (*githubv4.String)(nil)}
 	retries := 3
-	results := make(map[string][]string)
+	results := make(map[string][]MemberInfo) // Changed value type
 
 	for {
 		// Use ghClient and the renamed teamQuery
@@ -77,9 +87,14 @@ func getTeam(ghClient client.GitHubV4Client, org string) (map[string][]string, e
 			break
 		}
 
-		teamName := teamQuery.Viewer.Organization.Teams.Nodes[0].Name
+		teamName := string(teamQuery.Viewer.Organization.Teams.Nodes[0].Name) // Cast to string once
 		for _, m := range teamQuery.Viewer.Organization.Teams.Nodes[0].Members.Nodes {
-			results[string(teamName)] = append(results[string(teamName)], string(m.Login))
+			// Create MemberInfo struct and append
+			memberInfo := MemberInfo{
+				Login:     string(m.Login),
+				AvatarUrl: string(m.AvatarUrl), // Add avatar url
+			}
+			results[teamName] = append(results[teamName], memberInfo)
 		}
 
 		if teamQuery.Viewer.Organization.Teams.Nodes[0].Members.PageInfo.HasNextPage {

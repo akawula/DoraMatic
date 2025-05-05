@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	// Import organizations for MemberInfo type
+	"github.com/akawula/DoraMatic/github/organizations"
 	"github.com/akawula/DoraMatic/github/repositories"
 	ghv4 "github.com/shurcooL/githubv4" // Alias for clarity
 
@@ -249,9 +251,16 @@ func TestSaveTeams(t *testing.T) {
 	truncateTables(t, ctx, testPool)
 	store := newTestPostgresStore(t)
 
-	teamsToSave := map[string][]string{
-		"team-a": {"member1", "member2"},
-		"team-b": {"member2", "member3"},
+	// Updated teamsToSave to use organizations.MemberInfo
+	teamsToSave := map[string][]organizations.MemberInfo{
+		"team-a": {
+			{Login: "member1", AvatarUrl: "url-member1"},
+			{Login: "member2", AvatarUrl: "url-member2a"},
+		},
+		"team-b": {
+			{Login: "member2", AvatarUrl: "url-member2b"}, // Note: member2 in two teams
+			{Login: "member3", AvatarUrl: "url-member3"},
+		},
 	}
 
 	err := store.SaveTeams(ctx, teamsToSave)
@@ -275,8 +284,17 @@ func TestSaveTeams(t *testing.T) {
 		t.Fatalf("Failed to verify team-b member3: err=%v, member=%s", err, member)
 	}
 
-	newTeamsToSave := map[string][]string{
-		"team-c": {"member4"},
+	// Add check for avatar_url
+	var avatarUrl string
+	err = testPool.QueryRow(ctx, "SELECT avatar_url FROM teams WHERE team = $1 AND member = $2", "team-a", "member1").Scan(&avatarUrl)
+	if err != nil || avatarUrl != "url-member1" {
+		t.Fatalf("Failed to verify team-a member1 avatar_url: err=%v, avatar_url=%s", err, avatarUrl)
+	}
+
+
+	// Updated newTeamsToSave to use organizations.MemberInfo
+	newTeamsToSave := map[string][]organizations.MemberInfo{
+		"team-c": {{Login: "member4", AvatarUrl: "url-member4"}},
 	}
 	err = store.SaveTeams(ctx, newTeamsToSave)
 	if err != nil {
@@ -287,8 +305,8 @@ func TestSaveTeams(t *testing.T) {
 	if err != nil || count != 1 {
 		t.Fatalf("Failed to verify team member count after overwrite: err=%v, count=%d", err, count)
 	}
-	err = testPool.QueryRow(ctx, "SELECT member FROM teams WHERE team = $1 AND member = $2", "team-c", "member4").Scan(&member)
-	if err != nil || member != "member4" {
-		t.Fatalf("Failed to verify team-c member4 after overwrite: err=%v, member=%s", err, member)
+	err = testPool.QueryRow(ctx, "SELECT member, avatar_url FROM teams WHERE team = $1 AND member = $2", "team-c", "member4").Scan(&member, &avatarUrl)
+	if err != nil || member != "member4" || avatarUrl != "url-member4" {
+		t.Fatalf("Failed to verify team-c member4 after overwrite: err=%v, member=%s, avatar_url=%s", err, member, avatarUrl)
 	}
 }

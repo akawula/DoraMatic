@@ -12,9 +12,10 @@ import (
 )
 
 type Commit struct {
-	ID      string         `db:"id"`
-	PrID    string         `db:"pr_id"`
-	Message sql.NullString `db:"message"`
+	ID        string             `db:"id"`
+	PrID      string             `db:"pr_id"`
+	Message   sql.NullString     `db:"message"`
+	CreatedAt pgtype.Timestamptz `db:"created_at"`
 }
 
 type Pr struct {
@@ -53,6 +54,7 @@ type Repository struct {
 }
 
 type Team struct {
-	Team   string `db:"team"`
-	Member string `db:"member"`
+	Team      string         `db:"team"`
+	Member    string         `db:"member"`
+	AvatarUrl sql.NullString `db:"avatar_url"`
 }

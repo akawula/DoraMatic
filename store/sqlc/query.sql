@@ -49,8 +49,8 @@ DO UPDATE SET
 -- Commits --
 
 -- name: InsertCommit :exec
-INSERT INTO commits (id, pr_id, message)
-VALUES ($1, $2, $3)
+INSERT INTO commits (id, pr_id, message, created_at)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -75,8 +75,8 @@ DO UPDATE SET
 TRUNCATE TABLE teams;
 
 -- name: CreateTeamMember :exec
-INSERT INTO teams (team, member)
-VALUES ($1, $2);
+INSERT INTO teams (team, member, avatar_url)
+VALUES ($1, $2, $3);
 
 -- name: FetchSecurityPullRequests :many
 SELECT
