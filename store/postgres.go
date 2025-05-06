@@ -445,10 +445,40 @@ func (p *Postgres) SearchDistinctTeamNamesByPrefix(ctx context.Context, prefix s
 func (p *Postgres) CountTeamCommitsByDateRange(ctx context.Context, arg sqlc.CountTeamCommitsByDateRangeParams) (int32, error) {
 	count, err := p.queries.CountTeamCommitsByDateRange(ctx, arg)
 	if err != nil {
-		p.Logger.Error("Failed to count team commits by date range", "team", arg.Team, "error", err)
+		p.Logger.Error("Failed to count team commits by date range", "team", arg.TeamName, "error", err) // Changed arg.Team to arg.TeamName
 		return 0, err
 	}
 	return count, nil
+}
+
+// DiagnoseLeadTimes implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) DiagnoseLeadTimes(ctx context.Context) ([]sqlc.DiagnoseLeadTimesRow, error) {
+	results, err := p.queries.DiagnoseLeadTimes(ctx)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			p.Logger.Info("No data found for lead time diagnosis")
+			return []sqlc.DiagnoseLeadTimesRow{}, nil
+		}
+		p.Logger.Error("Failed to diagnose lead times", "error", err)
+		return nil, err
+	}
+	return results, nil
+}
+
+// GetTeamMembers implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) GetTeamMembers(ctx context.Context, team string) ([]sqlc.GetTeamMembersRow, error) {
+	members, err := p.queries.GetTeamMembers(ctx, team)
+	if err != nil {
+		// Handle pgx.ErrNoRows specifically if needed, otherwise log generic error
+		if err == pgx.ErrNoRows {
+			p.Logger.Info("No members found for team", "team", team)
+			// Return empty slice instead of error if no rows is not considered an error state
+			return []sqlc.GetTeamMembersRow{}, nil
+		}
+		p.Logger.Error("Failed to get team members", "team", team, "error", err)
+		return nil, err
+	}
+	return members, nil
 }
 
 // GetTeamPullRequestStatsByDateRange implements the Store interface method by calling the generated sqlc query.
@@ -457,11 +487,11 @@ func (p *Postgres) GetTeamPullRequestStatsByDateRange(ctx context.Context, arg s
 	if err != nil {
 		// Handle pgx.ErrNoRows specifically if needed, otherwise log generic error
 		if err == pgx.ErrNoRows {
-			p.Logger.Info("No pull request stats found for team in date range", "team", arg.Team)
+			p.Logger.Info("No pull request stats found for team in date range", "team", arg.TeamName) // Changed arg.Team to arg.TeamName
 			// Return zero stats instead of error if no rows is not considered an error state
 			return sqlc.GetTeamPullRequestStatsByDateRangeRow{}, nil
 		}
-		p.Logger.Error("Failed to get team pull request stats by date range", "team", arg.Team, "error", err)
+		p.Logger.Error("Failed to get team pull request stats by date range", "team", arg.TeamName, "error", err) // Changed arg.Team to arg.TeamName
 		return sqlc.GetTeamPullRequestStatsByDateRangeRow{}, err
 	}
 	return stats, nil

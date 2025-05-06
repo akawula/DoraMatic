@@ -14,7 +14,7 @@ run-cron: clean build-cron
 	DEBUG=1 ./app/cron
 
 run-server: clean build-server
-	./app/server
+	DEBUG=1 ./app/server
 
 clean:
 	rm -rf ./app

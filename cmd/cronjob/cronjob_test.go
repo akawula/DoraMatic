@@ -47,6 +47,10 @@ type MockStore struct {
 	// New methods for listing PRs
 	ListPullRequestsFunc                 func(ctx context.Context, arg sqlc.ListPullRequestsParams) ([]sqlc.ListPullRequestsRow, error)
 	CountPullRequestsFunc                func(ctx context.Context, arg sqlc.CountPullRequestsParams) (int32, error)
+	// New method for getting team members
+	GetTeamMembersFunc                   func(ctx context.Context, team string) ([]sqlc.GetTeamMembersRow, error)
+	// New method for diagnosing lead times
+	DiagnoseLeadTimesFunc                func(ctx context.Context) ([]sqlc.DiagnoseLeadTimesRow, error)
 
 	// Add fields to track calls if needed
 	SaveTeamsCalled                      bool
@@ -58,6 +62,8 @@ type MockStore struct {
 	GetTeamPullRequestStatsByDateRangeCalled bool
 	ListPullRequestsCalled               bool
 	CountPullRequestsCalled              bool
+	GetTeamMembersCalled                 bool
+	DiagnoseLeadTimesCalled              bool
 }
 
 // Updated SaveTeams method signature
@@ -143,6 +149,24 @@ func (m *MockStore) CountPullRequests(ctx context.Context, arg sqlc.CountPullReq
 		return m.CountPullRequestsFunc(ctx, arg)
 	}
 	return 0, nil // Default mock behavior
+}
+
+// Implement new store method for getting team members
+func (m *MockStore) GetTeamMembers(ctx context.Context, team string) ([]sqlc.GetTeamMembersRow, error) {
+	m.GetTeamMembersCalled = true
+	if m.GetTeamMembersFunc != nil {
+		return m.GetTeamMembersFunc(ctx, team)
+	}
+	return []sqlc.GetTeamMembersRow{}, nil // Default mock behavior
+}
+
+// Implement DiagnoseLeadTimes for MockStore
+func (m *MockStore) DiagnoseLeadTimes(ctx context.Context) ([]sqlc.DiagnoseLeadTimesRow, error) {
+	m.DiagnoseLeadTimesCalled = true
+	if m.DiagnoseLeadTimesFunc != nil {
+		return m.DiagnoseLeadTimesFunc(ctx)
+	}
+	return []sqlc.DiagnoseLeadTimesRow{}, nil // Default mock behavior
 }
 
 // Mock function types for GitHub interactions

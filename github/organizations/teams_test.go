@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
+	// "maps" // Removed unused import
 	"reflect" // Re-add reflect
 	"testing"
 
@@ -220,15 +220,17 @@ func TestGetTeam_Success_PaginatedMembers(t *testing.T) {
 	if callCount != 2 {
 		t.Errorf("Expected Query to be called 2 times for member pagination, got %d", callCount)
 	}
-	expectedMap := map[string][]string{
-		"team-beta": {"user-m1", "user-m2"},
+	// Adjust expectedMap type to match actual return type (map[string][]MemberInfo)
+	expectedMap := map[string][]MemberInfo{
+		// Assuming MemberInfo struct { Login string; AvatarUrl string }
+		// The mock response only sets Login, so AvatarUrl will be empty string.
+		"team-beta": {{Login: "user-m1", AvatarUrl: ""}, {Login: "user-m2", AvatarUrl: ""}},
 	}
-	// Check map content carefully as order might vary in mock setup vs result concatenation
-	if len(teamMap) != 1 || len(teamMap["team-beta"]) != 2 || !reflect.DeepEqual(teamMap, expectedMap) {
-		// Basic check first
-		if !maps.EqualFunc(teamMap, expectedMap, func(s1, s2 []string) bool { return reflect.DeepEqual(s1, s2) }) {
-			t.Errorf("Expected team map %v, got %v", expectedMap, teamMap)
-		}
+	// Use reflect.DeepEqual for direct comparison.
+	// Note: This assumes the order of members ("user-m1", "user-m2") is deterministic in the test.
+	// If order is not guaranteed, a more complex comparison (like sorting slices or using sets) would be needed.
+	if !reflect.DeepEqual(teamMap, expectedMap) {
+		t.Errorf("Expected team map %v, got %v", fmt.Sprintf("%+v", expectedMap), fmt.Sprintf("%+v", teamMap))
 	}
 }
 
@@ -335,20 +337,16 @@ func TestGetTeams_Success(t *testing.T) {
 	if callCount != 2 { // 1 for orgs, 1 for teams in org1
 		t.Errorf("Expected Query to be called 2 times, got %d", callCount)
 	}
-	expectedMap := map[string][]string{
-		"team-final": {"user-final"},
+	// Adjust expectedMap type to match actual return type (map[string][]MemberInfo)
+	expectedMap := map[string][]MemberInfo{
+		// Assuming MemberInfo struct { Login string; AvatarUrl string }
+		// The mock response only sets Login, so AvatarUrl will be empty string.
+		"team-final": {{Login: "user-final", AvatarUrl: ""}},
 	}
-	if !maps.EqualFunc(teamsMap, expectedMap, func(s1, s2 []string) bool {
-		// Simple comparison assuming order doesn't matter for this small example
-		if len(s1) != len(s2) {
-			return false
-		}
-		if len(s1) == 0 {
-			return true
-		} // Both empty
-		return s1[0] == s2[0] // Adjust if more complex comparison needed
-	}) {
-		t.Errorf("Expected final teams map %v, got %v", expectedMap, teamsMap)
+	// Use reflect.DeepEqual for direct comparison, assuming order is deterministic here.
+	if !reflect.DeepEqual(teamsMap, expectedMap) {
+		// Use fmt.Sprintf for potentially complex map printing
+		t.Errorf("Expected final teams map %v, got %v", fmt.Sprintf("%+v", expectedMap), fmt.Sprintf("%+v", teamsMap))
 	}
 }
 

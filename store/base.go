@@ -46,9 +46,15 @@ type Store interface {
 	CountTeamCommitsByDateRange(ctx context.Context, arg sqlc.CountTeamCommitsByDateRangeParams) (int32, error)
 	GetTeamPullRequestStatsByDateRange(ctx context.Context, arg sqlc.GetTeamPullRequestStatsByDateRangeParams) (sqlc.GetTeamPullRequestStatsByDateRangeRow, error)
 
-	// New methods for listing pull requests
+	// Updated methods for listing pull requests (added TeamName)
 	ListPullRequests(ctx context.Context, arg sqlc.ListPullRequestsParams) ([]sqlc.ListPullRequestsRow, error)
 	CountPullRequests(ctx context.Context, arg sqlc.CountPullRequestsParams) (int32, error)
+
+	// New method for getting team members
+	GetTeamMembers(ctx context.Context, team string) ([]sqlc.GetTeamMembersRow, error)
+
+	// New method for diagnosing lead times
+	DiagnoseLeadTimes(ctx context.Context) ([]sqlc.DiagnoseLeadTimesRow, error)
 	// Removed duplicate Close()
 }
 

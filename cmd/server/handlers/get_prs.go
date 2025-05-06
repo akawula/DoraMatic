@@ -2,27 +2,34 @@ package handlers
 
 import (
 	"encoding/json"
+	// "fmt" // No longer needed
 	"log/slog"
+	// "math"     // No longer needed for this specific logic
+	// "math/big" // No longer needed for this specific logic
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/akawula/DoraMatic/store"
-	"github.com/akawula/DoraMatic/store/sqlc" // Import sqlc package
+	"github.com/akawula/DoraMatic/store/sqlc"
 )
 
 // Define the response structure based on swagger.yaml
 type PullRequestAPI struct {
-	ID       string `json:"id"` // Changed from int to string based on DB schema
-	RepoName string `json:"repo_name"`
-	// Number int `json:"number"` // Number is not in the DB schema
-	Title     string     `json:"title"`
-	Author    string     `json:"author"`
-	State     string     `json:"state"`
-	CreatedAt time.Time  `json:"created_at"`
-	MergedAt  *time.Time `json:"merged_at"` // Use pointer for nullable
-	// ClosedAt *time.Time `json:"closed_at"` // closed_at does not exist in DB
-	URL string `json:"url"`
+	ID                      string     `json:"id"` // Changed from int to string based on DB schema
+	RepoName                string     `json:"repo_name"`
+	Title                   string     `json:"title"`
+	Author                  string     `json:"author"`
+	State                   string     `json:"state"`
+	CreatedAt               time.Time  `json:"created_at"`
+	MergedAt                *time.Time `json:"merged_at"` // Use pointer for nullable
+	Additions               int32      `json:"additions"` // Add additions
+	Deletions               int32      `json:"deletions"` // Add deletions
+	URL                     string     `json:"url"`
+	LeadTimeToCodeSeconds   *int64     `json:"lead_time_to_code_seconds"`   // Use pointer for nullable float64
+	LeadTimeToReviewSeconds *int64     `json:"lead_time_to_review_seconds"` // Use pointer for nullable float64
+	LeadTimeToMergeSeconds  *int64     `json:"lead_time_to_merge_seconds"`  // Use pointer for nullable float64
 }
 
 type PullRequestListResponseAPI struct {
@@ -42,6 +49,8 @@ func calculateOffset(page, limit int) int {
 	return offset
 }
 
+// getInt64FromInterface function is removed as it's no longer needed.
+
 func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -49,9 +58,16 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 		// --- Parameter Parsing & Validation ---
 		startDateStr := r.URL.Query().Get("start_date")
 		endDateStr := r.URL.Query().Get("end_date")
-		search := r.URL.Query().Get("search") // Optional
+		search := r.URL.Query().Get("search")      // Optional
+		teamName := r.URL.Query().Get("team")      // Optional team filter
+		membersStr := r.URL.Query().Get("members") // New members query parameter
 		pageStr := r.URL.Query().Get("page")
 		pageSizeStr := r.URL.Query().Get("page_size")
+
+		var selectedMembers []string
+		if membersStr != "" {
+			selectedMembers = strings.Split(membersStr, ",")
+		}
 
 		if startDateStr == "" || endDateStr == "" {
 			http.Error(w, "Missing required query parameters: start_date and end_date", http.StatusBadRequest)
@@ -93,17 +109,21 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 
 		// --- Database Interaction ---
 		listParams := sqlc.ListPullRequestsParams{
-			StartDate:  startDate, // Use time.Time directly
-			EndDate:    endDate,   // Use time.Time directly
-			SearchTerm: search,    // sqlc query handles empty string check
+			StartDate:  startDate,
+			EndDate:    endDate,
+			SearchTerm: search,
+			TeamName:   teamName,
+			Members:    selectedMembers, // Add members to params
 			PageSize:   int32(pageSize),
 			OffsetVal:  int32(offset),
 		}
 
 		countParams := sqlc.CountPullRequestsParams{
-			StartDate:  startDate, // Use time.Time directly
-			EndDate:    endDate,   // Use time.Time directly
+			StartDate:  startDate,
+			EndDate:    endDate,
 			SearchTerm: search,
+			TeamName:   teamName,
+			Members:    selectedMembers, // Add members to params
 		}
 
 		logger.Debug("Fetching pull requests", "params", listParams)
@@ -113,6 +133,9 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
+
+		// Andrew here!
+		logger.Info("Fetched pull requests from DB", "prs", dbPRs)
 
 		logger.Debug("Counting pull requests", "params", countParams)
 		totalCount, err := db.CountPullRequests(ctx, countParams)
@@ -139,6 +162,8 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 				mergedAtPtr = &dbPR.MergedAt.Time
 			}
 
+			// Debug printf line removed.
+
 			apiPR := PullRequestAPI{
 				ID:        dbPR.ID,                    // ID is string in sqlc row
 				RepoName:  dbPR.RepositoryName.String, // pgtype.Text -> string
@@ -147,9 +172,36 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 				State:     dbPR.State.String,          // pgtype.Text -> string
 				CreatedAt: dbPR.CreatedAt,             // time.Time
 				MergedAt:  mergedAtPtr,                // *time.Time
+				Additions: dbPR.Additions.Int32,       // pgtype.Int4 -> int32
+				Deletions: dbPR.Deletions.Int32,       // pgtype.Int4 -> int32
 				URL:       dbPR.Url.String,            // sql.NullString -> string
+				// LeadTime fields will be sql.NullFloat64 or similar from sqlc
 			}
+
+			// Handle lead time fields (now float64 from sqlc)
+			// Convert to *int64 for the API response.
+			// If the SQL returned 0.0 (our ELSE case), this will become 0 in JSON.
+			// If the API requires 'null' for 0.0, further logic would be needed here to set the pointer to nil if val is 0.
+			// For now, 0.0 from DB will become 0 in JSON.
+			valLTTCS := int64(dbPR.LeadTimeToCodeSeconds)
+			apiPR.LeadTimeToCodeSeconds = &valLTTCS
+
+			valLTTRS := int64(dbPR.LeadTimeToReviewSeconds)
+			apiPR.LeadTimeToReviewSeconds = &valLTTRS
+
+			valLTTMS := int64(dbPR.LeadTimeToMergeSeconds)
+			apiPR.LeadTimeToMergeSeconds = &valLTTMS
+
 			// Add Valid checks if needed for non-nullable API fields mapped from nullable DB fields
+			// Check validity for additions and deletions (assuming they are nullable in DB, though query doesn't show it)
+			// If sqlc generated them as non-nullable int32, these checks are not needed.
+			// Let's assume they are nullable pgtype.Int4 based on other fields.
+			if !dbPR.Additions.Valid {
+				apiPR.Additions = 0 // Default to 0 if null
+			}
+			if !dbPR.Deletions.Valid {
+				apiPR.Deletions = 0 // Default to 0 if null
+			}
 			if !dbPR.RepositoryName.Valid {
 				apiPR.RepoName = ""
 			}

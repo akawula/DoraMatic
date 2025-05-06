@@ -68,6 +68,10 @@ func main() {
 	http.HandleFunc("GET /teams/{teamName}/stats", handlers.GetTeamStatsHandler(dbStore))
 	// Register the new pull requests list handler
 	http.HandleFunc("GET /prs", handlers.GetPullRequests(logger, dbStore))
+	// Register the new team members handler
+	http.HandleFunc("GET /teams/{teamName}/members", handlers.GetTeamMembersHandler(dbStore))
+	// Register the new diagnostic handler
+	http.HandleFunc("GET /diagnose/leadtimes", handlers.DiagnoseLeadTimesHandler(dbStore))
 
 	port := "10000" // Default port, can be overridden by env var later if needed
 	logger.Info("Server starting", "port", port) // Use structured logging

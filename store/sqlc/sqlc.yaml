@@ -23,6 +23,22 @@ sql:
             go_type:
               import: "database/sql"
               type: "NullString"
+          # Column-specific overrides for calculated lead time fields from the ListPullRequests query
+          - column: "ListPullRequests.lead_time_to_code_seconds" # QueryName.ColumnAlias
+            nullable: true
+            go_type:
+              import: "github.com/jackc/pgx/v5/pgtype"
+              type: "Float8"
+          - column: "ListPullRequests.lead_time_to_review_seconds" # QueryName.ColumnAlias
+            nullable: true
+            go_type:
+              import: "github.com/jackc/pgx/v5/pgtype"
+              type: "Float8"
+          - column: "ListPullRequests.lead_time_to_merge_seconds" # QueryName.ColumnAlias
+            nullable: true
+            go_type:
+              import: "github.com/jackc/pgx/v5/pgtype"
+              type: "Float8"
           - db_type: "varchar"
             nullable: true
             go_type:

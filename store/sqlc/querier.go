@@ -19,15 +19,28 @@ type Querier interface {
 	CountTeamCommitsByDateRange(ctx context.Context, arg CountTeamCommitsByDateRangeParams) (int32, error)
 	CreateRepository(ctx context.Context, arg CreateRepositoryParams) error
 	CreateTeamMember(ctx context.Context, arg CreateTeamMemberParams) error
+	// Filter by selected members
+	// FirstReviewPerPR AS ( -- No longer needed
+	//     SELECT
+	//         pull_request_id,
+	//         MIN(submitted_at) as first_review_at
+	//     FROM pull_request_reviews
+	//     WHERE state = 'APPROVED' OR state = 'CHANGES_REQUESTED'
+	//     GROUP BY pull_request_id
+	// ) -- No longer needed
+	// LEFT JOIN FirstReviewPerPR fr ON p.id = fr.pull_request_id -- No longer needed
+	DiagnoseLeadTimes(ctx context.Context) ([]DiagnoseLeadTimesRow, error)
 	FetchSecurityPullRequests(ctx context.Context) ([]FetchSecurityPullRequestsRow, error)
 	GetAllRepositories(ctx context.Context) ([]Repository, error)
 	// Pull Requests (prs) --
 	GetLastPullRequestMergedDate(ctx context.Context, arg GetLastPullRequestMergedDateParams) (pgtype.Timestamptz, error)
-	// pgtype.Timestamptz
+	GetTeamMembers(ctx context.Context, team string) ([]GetTeamMembersRow, error)
+	// Filter by PR merge date
+	// LEFT JOIN FirstReviewPerPR fr ON p.id = fr.pull_request_id -- Join with first review data -- No longer needed
 	GetTeamPullRequestStatsByDateRange(ctx context.Context, arg GetTeamPullRequestStatsByDateRangeParams) (GetTeamPullRequestStatsByDateRangeRow, error)
 	// Commits --
 	InsertCommit(ctx context.Context, arg InsertCommitParams) error
-	// List Pull Requests (Paginated & Searchable) --
+	// List Pull Requests (Paginated & Searchable by Title/Author and optionally Team) --
 	ListPullRequests(ctx context.Context, arg ListPullRequestsParams) ([]ListPullRequestsRow, error)
 	// Use ILIKE for case-insensitive search, handle empty search string
 	ListRepositories(ctx context.Context, arg ListRepositoriesParams) ([]Repository, error)

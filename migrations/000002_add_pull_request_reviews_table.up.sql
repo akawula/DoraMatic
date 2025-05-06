@@ -24,6 +24,7 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+DROP TRIGGER IF EXISTS update_pull_request_reviews_updated_at ON pull_request_reviews; -- Add this line
 CREATE TRIGGER update_pull_request_reviews_updated_at
 BEFORE UPDATE ON pull_request_reviews
 FOR EACH ROW
