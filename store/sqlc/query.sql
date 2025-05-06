@@ -176,7 +176,9 @@ SELECT
             THEN 1 -- Count this PR
             ELSE NULL
         END
-    )::int AS count_prs_for_avg_lead_time_to_merge
+    )::int AS count_prs_for_avg_lead_time_to_merge,
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' AND p.merged_at >= sqlc.arg(start_date)::timestamptz AND p.merged_at <= sqlc.arg(end_date)::timestamptz THEN p.additions ELSE 0 END), 0)::bigint AS total_additions,
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' AND p.merged_at >= sqlc.arg(start_date)::timestamptz AND p.merged_at <= sqlc.arg(end_date)::timestamptz THEN p.deletions ELSE 0 END), 0)::bigint AS total_deletions
 FROM prs p
 JOIN teams t ON p.author = t.member
 LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id

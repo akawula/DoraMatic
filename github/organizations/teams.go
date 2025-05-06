@@ -2,7 +2,6 @@ package organizations
 
 import (
 	"context"
-	"maps"
 
 	"github.com/akawula/DoraMatic/github/client" // Import client package
 	"github.com/shurcooL/githubv4"
@@ -50,14 +49,20 @@ func GetTeams(ghClient client.GitHubV4Client) (map[string][]MemberInfo, error) {
 		return nil, err
 	}
 
-	results := make(map[string][]MemberInfo) // Changed value type
+	results := make(map[string][]MemberInfo)
 	for _, org := range orgs {
 		// Pass ghClient to getTeam
-		team, err := getTeam(ghClient, org) // getTeam now returns map[string][]MemberInfo
+		teamsInOrg, err := getTeam(ghClient, org) // getTeam returns map[string][]MemberInfo for a single org
 		if err != nil {
-			return nil, err // TODO: Consider logging and continuing?
+			// TODO: Consider logging and continuing, or returning partial results.
+			// For now, maintaining fail-fast behavior from original logic.
+			return nil, err
 		}
-		maps.Copy(results, team)
+		// Use a qualified team name (org/team) to prevent collisions between orgs
+		for teamName, members := range teamsInOrg {
+			qualifiedTeamName := org + "/" + teamName
+			results[qualifiedTeamName] = members
+		}
 	}
 
 	return results, nil

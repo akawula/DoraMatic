@@ -414,7 +414,9 @@ SELECT
             THEN 1 -- Count this PR
             ELSE NULL
         END
-    )::int AS count_prs_for_avg_lead_time_to_merge
+    )::int AS count_prs_for_avg_lead_time_to_merge,
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' AND p.merged_at >= $1::timestamptz AND p.merged_at <= $2::timestamptz THEN p.additions ELSE 0 END), 0)::bigint AS total_additions,
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' AND p.merged_at >= $1::timestamptz AND p.merged_at <= $2::timestamptz THEN p.deletions ELSE 0 END), 0)::bigint AS total_deletions
 FROM prs p
 JOIN teams t ON p.author = t.member
 LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id
@@ -442,6 +444,8 @@ type GetTeamPullRequestStatsByDateRangeRow struct {
 	AvgLeadTimeToReviewSeconds    float64 `db:"avg_lead_time_to_review_seconds"`
 	AvgLeadTimeToMergeSeconds     float64 `db:"avg_lead_time_to_merge_seconds"`
 	CountPrsForAvgLeadTimeToMerge int32   `db:"count_prs_for_avg_lead_time_to_merge"`
+	TotalAdditions                int64   `db:"total_additions"`
+	TotalDeletions                int64   `db:"total_deletions"`
 }
 
 // Filter by PR merge date
@@ -463,6 +467,8 @@ func (q *Queries) GetTeamPullRequestStatsByDateRange(ctx context.Context, arg Ge
 		&i.AvgLeadTimeToReviewSeconds,
 		&i.AvgLeadTimeToMergeSeconds,
 		&i.CountPrsForAvgLeadTimeToMerge,
+		&i.TotalAdditions,
+		&i.TotalDeletions,
 	)
 	return i, err
 }

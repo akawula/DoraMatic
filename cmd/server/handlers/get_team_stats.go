@@ -26,6 +26,9 @@ type SinglePeriodStats struct {
 	AvgLeadTimeToReviewSeconds    float64 `json:"avg_lead_time_to_review_seconds"`
 	AvgLeadTimeToMergeSeconds     float64 `json:"avg_lead_time_to_merge_seconds"`
 	CountPRsForAvgLeadTimeToMerge int     `json:"count_prs_for_avg_lead_time_to_merge"`
+	AvgPRSizeLines                float64 `json:"avg_pr_size_lines"`
+	ChangeFailureRate             float64 `json:"change_failure_rate_percentage"`
+	AvgCommitsPerMergedPR         float64 `json:"avg_commits_per_merged_pr"`
 }
 
 // TeamStatsComparisonResponse defines the structure for comparing two periods and including trend data.
@@ -143,6 +146,7 @@ func GetTeamStatsHandler(store store.Store) http.HandlerFunc { //nolint:maintidx
 		trendStatKeys := []string{
 			"merged_prs_count", "closed_prs_count", "commits_count", "rollbacks_count",
 			"avg_lead_time_to_code_seconds", "avg_lead_time_to_review_seconds", "avg_lead_time_to_merge_seconds",
+			"avg_pr_size_lines", "change_failure_rate_percentage", "avg_commits_per_merged_pr",
 		}
 
 		for _, key := range trendStatKeys {
@@ -167,6 +171,12 @@ func GetTeamStatsHandler(store store.Store) http.HandlerFunc { //nolint:maintidx
 					values[j] = pStats.AvgLeadTimeToReviewSeconds
 				case "avg_lead_time_to_merge_seconds":
 					values[j] = pStats.AvgLeadTimeToMergeSeconds
+				case "avg_pr_size_lines":
+					values[j] = pStats.AvgPRSizeLines
+				case "change_failure_rate_percentage":
+					values[j] = pStats.ChangeFailureRate
+				case "avg_commits_per_merged_pr":
+					values[j] = pStats.AvgCommitsPerMergedPR
 				default:
 					values[j] = 0 // Should not happen if keys are correct
 				}
@@ -236,7 +246,36 @@ func fetchStatsForPeriod(ctx context.Context, store store.Store, teamName string
 		AvgLeadTimeToReviewSeconds:    prStats.AvgLeadTimeToReviewSeconds,
 		AvgLeadTimeToMergeSeconds:     prStats.AvgLeadTimeToMergeSeconds,
 		CountPRsForAvgLeadTimeToMerge: int(prStats.CountPrsForAvgLeadTimeToMerge),
+		// Calculate AvgPRSizeLines
+		AvgPRSizeLines: calculateAvgPRSize(prStats.TotalAdditions, prStats.TotalDeletions, prStats.MergedCount),
+		// Calculate ChangeFailureRate
+		ChangeFailureRate: calculateChangeFailureRate(prStats.RollbacksCount, prStats.MergedCount),
+		// Calculate AvgCommitsPerMergedPR
+		AvgCommitsPerMergedPR: calculateAvgCommitsPerMergedPR(int64(commitCount), prStats.MergedCount),
 	}
 
 	return stats, nil
+}
+
+func calculateAvgPRSize(totalAdditions, totalDeletions int64, mergedPRsCount int32) float64 {
+	if mergedPRsCount == 0 {
+		return 0
+	}
+	return float64(totalAdditions+totalDeletions) / float64(mergedPRsCount)
+}
+
+func calculateChangeFailureRate(rollbacksCount, deploymentsCount int32) float64 {
+	if deploymentsCount == 0 {
+		return 0 // Avoid division by zero; if no deployments, CFR is 0 or undefined.
+	}
+	return (float64(rollbacksCount) / float64(deploymentsCount)) * 100
+}
+
+func calculateAvgCommitsPerMergedPR(totalCommitsInMergedPRs int64, mergedPRsCount int32) float64 {
+	if mergedPRsCount == 0 {
+		return 0
+	}
+	// Note: commitCount from CountTeamCommitsByDateRange already filters commits
+	// by PRs merged within the specified date range.
+	return float64(totalCommitsInMergedPRs) / float64(mergedPRsCount)
 }

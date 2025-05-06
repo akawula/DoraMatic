@@ -6,18 +6,7 @@ import Typography from "@mui/joy/Typography";
 import CircularProgress from "@mui/joy/CircularProgress";
 import Box from "@mui/joy/Box";
 import Chip from "@mui/joy/Chip";
-import { formatDistanceToNow } from "date-fns";
-
-const formatDate = (dateString) => {
-  if (!dateString) return "N/A";
-  try {
-    const date = new Date(dateString.Time || dateString);
-    return formatDistanceToNow(date, { addSuffix: true });
-  } catch (e) {
-    console.error("Error parsing date:", dateString, e);
-    return "Invalid Date";
-  }
-};
+// import { formatDistanceToNow } from "date-fns"; // formatDate was unused
 
 // Helper function to format lead time in seconds to a readable string
 const formatLeadTime = (seconds) => {

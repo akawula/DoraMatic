@@ -69,7 +69,6 @@ function StatsGrid({ stats, loadingStats, selectedTeam, startDate, endDate }) {
   }
 
   if (!stats) {
-    return null; // Don't render anything if stats aren't loaded yet
     return null; // Don't render anything if stats aren't loaded yet or invalid
   }
 
@@ -145,6 +144,28 @@ function StatsGrid({ stats, loadingStats, selectedTeam, startDate, endDate }) {
       trendKey: "avg_lead_time_to_merge_seconds",
       isLeadTime: true,
     },
+    {
+      label: "Avg PR Size (Lines)",
+      current: stats.current?.avg_pr_size_lines,
+      previous: stats.previous?.avg_pr_size_lines,
+      trendKey: "avg_pr_size_lines",
+      isLeadTime: false, // It's a count of lines
+    },
+    {
+      label: "Change Failure Rate",
+      current: stats.current?.change_failure_rate_percentage,
+      previous: stats.previous?.change_failure_rate_percentage,
+      trendKey: "change_failure_rate_percentage",
+      isLeadTime: false, // It's a percentage
+      isPercentage: true, // Custom flag to handle '%' display
+    },
+    {
+      label: "Avg Commits / PR",
+      current: stats.current?.avg_commits_per_merged_pr,
+      previous: stats.previous?.avg_commits_per_merged_pr,
+      trendKey: "avg_commits_per_merged_pr",
+      isLeadTime: false,
+    },
   ];
 
   return (
@@ -165,9 +186,13 @@ function StatsGrid({ stats, loadingStats, selectedTeam, startDate, endDate }) {
             previousValueText = item.previous !== undefined && item.previous !== null
               ? `(Prev: ${formatLeadTimeDisplay(item.previous)})`
               : "";
-          } else {
-            currentValueDisplay = typeof item.current === 'number' ? item.current.toLocaleString() : "N/A";
-            previousValueText = typeof item.previous === 'number' ? `(Prev: ${item.previous.toLocaleString()})` : "";
+          } else if (item.isPercentage) {
+            currentValueDisplay = typeof item.current === 'number' ? `${item.current.toFixed(1)}%` : "N/A";
+            previousValueText = typeof item.previous === 'number' ? `(Prev: ${item.previous.toFixed(1)}%)` : "";
+          }
+          else {
+            currentValueDisplay = typeof item.current === 'number' ? item.current.toLocaleString(undefined, {maximumFractionDigits: 1}) : "N/A";
+            previousValueText = typeof item.previous === 'number' ? `(Prev: ${item.previous.toLocaleString(undefined, {maximumFractionDigits: 1})})` : "";
           }
 
           return (

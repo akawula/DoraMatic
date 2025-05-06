@@ -84,18 +84,18 @@ function App() {
     if (selectedTeam) {
       setLoadingMembers(true);
       setTeamMembers([]);
-      // setSelectedMemberLogins(new Set()); // Don't clear here, load from storage or default after fetch
       setStats(null);
       setPullRequests([]);
-      setPrCurrentPage(1);
+      setPrCurrentPage(1); // Reset to page 1 when team changes
       setPrTotalCount(0);
-      setFetchAttempted(false);
+      setFetchAttempted(false); // Reset fetch attempt for new team
       setError(null);
       setMembersError(null);
       setPrsError(null);
 
-      axios.get(`/teams/${encodeURIComponent(selectedTeam)}/members`)
-        .then(response => {
+      axios
+        .get(`/teams/${encodeURIComponent(selectedTeam)}/members`)
+        .then((response) => {
           const fetchedTeamMembers = response.data || [];
           setTeamMembers(fetchedTeamMembers);
 
@@ -106,168 +106,208 @@ function App() {
           if (storedSelectionStr) {
             try {
               const storedLoginsArray = JSON.parse(storedSelectionStr);
-              if (Array.isArray(storedLoginsArray)) { // Basic validation
-                // Further validate: ensure all stored logins are actual members of the fetched team
-                const validStoredLogins = storedLoginsArray.filter(login =>
-                  fetchedTeamMembers.some(member => member.Member === login)
+              if (Array.isArray(storedLoginsArray)) {
+                const validStoredLogins = storedLoginsArray.filter((login) =>
+                  fetchedTeamMembers.some((member) => member.Member === login)
                 );
                 initialSelection = new Set(validStoredLogins);
-                // If stored selection is empty, it's a valid "all deselected" state
-                if (storedLoginsArray.length === 0 && fetchedTeamMembers.length > 0) {
-                    initialSelection = new Set();
-                } else if (validStoredLogins.length === 0 && storedLoginsArray.length > 0 && fetchedTeamMembers.length > 0) {
-                    // Stored logins were present but none are valid members now, default to all selected
-                    initialSelection = new Set(fetchedTeamMembers.map(m => m.Member));
-                } else if (validStoredLogins.length === 0 && fetchedTeamMembers.length === 0) {
-                    initialSelection = new Set(); // No members, empty selection
+                if (
+                  storedLoginsArray.length === 0 &&
+                  fetchedTeamMembers.length > 0
+                ) {
+                  initialSelection = new Set();
+                } else if (
+                  validStoredLogins.length === 0 &&
+                  storedLoginsArray.length > 0 &&
+                  fetchedTeamMembers.length > 0
+                ) {
+                  initialSelection = new Set(
+                    fetchedTeamMembers.map((m) => m.Member)
+                  );
+                } else if (
+                  validStoredLogins.length === 0 &&
+                  fetchedTeamMembers.length === 0
+                ) {
+                  initialSelection = new Set();
                 }
               } else {
-                console.warn("Invalid stored member selection format, defaulting to all.");
-                initialSelection = new Set(fetchedTeamMembers.map(m => m.Member));
+                console.warn(
+                  "Invalid stored member selection format, defaulting to all."
+                );
+                initialSelection = new Set(
+                  fetchedTeamMembers.map((m) => m.Member)
+                );
               }
             } catch (e) {
-              console.error("Failed to parse stored member selection, defaulting to all:", e);
-              initialSelection = new Set(fetchedTeamMembers.map(m => m.Member));
+              console.error(
+                "Failed to parse stored member selection, defaulting to all:",
+                e
+              );
+              initialSelection = new Set(
+                fetchedTeamMembers.map((m) => m.Member)
+              );
             }
           } else {
-            // No stored selection, default to all members
-            initialSelection = new Set(fetchedTeamMembers.map(m => m.Member));
+            initialSelection = new Set(fetchedTeamMembers.map((m) => m.Member));
           }
           setSelectedMemberLogins(initialSelection);
         })
-        .catch(err => {
+        .catch((err) => {
           console.error("Error fetching team members:", err);
-          setMembersError(`Failed to fetch members for team "${selectedTeam}".`);
-          setTeamMembers([]); // Ensure members are empty on error
-          setSelectedMemberLogins(new Set()); // Ensure selection is empty on error
+          setMembersError(
+            `Failed to fetch members for team "${selectedTeam}".`
+          );
+          setTeamMembers([]);
+          setSelectedMemberLogins(new Set());
         })
         .finally(() => {
           setLoadingMembers(false);
         });
     } else {
-      // Clear all data if no team is selected
       setTeamMembers([]);
       setSelectedMemberLogins(new Set());
       setStats(null);
       setPullRequests([]);
       setPrTotalCount(0);
+      setPrCurrentPage(1);
       setFetchAttempted(false);
     }
   }, [selectedTeam]);
 
   // Effect to save selectedMemberLogins to localStorage
   useEffect(() => {
-    if (selectedTeam && teamMembers.length > 0) { // Only save if team and members are loaded
-      // This ensures we don't save an empty set just because members haven't loaded yet.
-      // We save even if selectedMemberLogins is empty (all deselected).
+    if (selectedTeam && teamMembers.length > 0) {
       const storageKey = `selectedMembers_${selectedTeam}`;
       try {
-        localStorage.setItem(storageKey, JSON.stringify(Array.from(selectedMemberLogins)));
+        localStorage.setItem(
+          storageKey,
+          JSON.stringify(Array.from(selectedMemberLogins))
+        );
       } catch (e) {
         console.error("Failed to save member selection to local storage:", e);
       }
     }
-  }, [selectedMemberLogins, selectedTeam, teamMembers]); // Depends on these to save correctly
+  }, [selectedMemberLogins, selectedTeam, teamMembers]);
 
-  // Renamed handleFetchData to handleFetchStatsAndPRs
-  // This function will not fetch members anymore.
-  const handleFetchStatsAndPRs = useCallback(async (page = 1, currentSelectedLogins) => {
-    if (!selectedTeam || !startDate || !endDate || teamMembers.length === 0 && currentSelectedLogins.size === 0) {
-      // Do not fetch if no team, no dates, or if members haven't loaded yet (unless a specific selection is already made, which is unlikely here)
-      // If teamMembers is empty AND currentSelectedLogins is empty, it implies members are still loading or failed.
-      // If currentSelectedLogins has items, it means user interacted, so proceed.
-      // If teamMembers has items and currentSelectedLogins is empty, it means user deselected all.
+  const handleFetchStatsAndPRs = useCallback(
+    async (page, currentSelectedLogins, fetchStats = true) => {
       if (!selectedTeam || !startDate || !endDate) {
-         setError("Please select a team and specify a valid date range.");
+        return;
       }
-      // If teamMembers.length === 0 and currentSelectedLogins.size === 0, it might be mid-load of members.
-      // The useEffect below will manage this.
-      return;
-    }
+      if (teamMembers.length === 0 && currentSelectedLogins.size === 0 && !fetchAttempted) {
+        return;
+      }
 
-    setFetchAttempted(true);
-    setPrCurrentPage(page);
+      setFetchAttempted(true);
 
-    setLoadingStats(true);
-    setLoadingPRs(true);
-    // Don't clear stats/PRs here if it's just a page change for PRs.
-    // Clearing should happen if selectedTeam, dates, or selectedMemberLogins change.
-    // The useEffect below handles clearing for major changes.
-    if (page === 1) { // Clear only if it's a "reset" to page 1 due to filter changes
-        setStats(null);
+      setLoadingPRs(true);
+      setPrsError(null);
+      if (page === 1) {
         setPullRequests([]);
-    }
-    setError(null); // Clear general error
-    setPrsError(null); // Clear PR specific error
+      }
 
+      if (fetchStats) {
+        setLoadingStats(true);
+        setError(null);
+        if (page === 1) {
+          setStats(null);
+        }
+      }
 
-    const rfcStartDate = `${startDate}T00:00:00Z`;
-    const rfcEndDate = `${endDate}T23:59:59Z`;
-    const selectedLoginsArray = Array.from(currentSelectedLogins);
-    const membersQueryParam = selectedLoginsArray.length > 0 ? selectedLoginsArray.join(',') : undefined;
+      const rfcStartDate = `${startDate}T00:00:00Z`;
+      const rfcEndDate = `${endDate}T23:59:59Z`;
+      const selectedLoginsArray = Array.from(currentSelectedLogins);
+      const membersQueryParam =
+        selectedLoginsArray.length > 0
+          ? selectedLoginsArray.join(",")
+          : undefined;
 
-    const promises = [];
+      const promises = [];
 
-    promises.push(
-      axios.get(`/teams/${encodeURIComponent(selectedTeam)}/stats`, {
-        params: { start_date: rfcStartDate, end_date: rfcEndDate, members: membersQueryParam },
-      })
-      .then(response => setStats(response.data))
-      .catch(err => {
-        console.error("Error fetching stats:", err);
-        setError(`Failed to fetch stats for team "${selectedTeam}".`);
-        setStats(null);
-      })
-      .finally(() => setLoadingStats(false))
-    );
+      if (fetchStats) {
+        promises.push(
+          axios
+            .get(`/teams/${encodeURIComponent(selectedTeam)}/stats`, {
+              params: {
+                start_date: rfcStartDate,
+                end_date: rfcEndDate,
+                members: membersQueryParam,
+              },
+            })
+            .then((response) => setStats(response.data))
+            .catch((err) => {
+              console.error("Error fetching stats:", err);
+              setError(`Failed to fetch stats for team "${selectedTeam}".`);
+              setStats(null);
+            })
+            .finally(() => setLoadingStats(false))
+        );
+      }
 
-    promises.push(
-      axios.get(`/prs`, {
-        params: {
-          start_date: rfcStartDate,
-          end_date: rfcEndDate,
-          team: selectedTeam,
-          page: page,
-          page_size: prPageSize,
-          members: membersQueryParam,
-        },
-      })
-      .then(response => {
-        setPullRequests(response.data?.pull_requests || []);
-        setPrTotalCount(response.data?.total_count || 0);
-      })
-      .catch(err => {
-        console.error("Error fetching pull requests:", err);
-        setPrsError(`Failed to fetch pull requests.`);
-        setPullRequests([]);
-        setPrTotalCount(0);
-      })
-      .finally(() => setLoadingPRs(false))
-    );
+      promises.push(
+        axios
+          .get(`/prs`, {
+            params: {
+              start_date: rfcStartDate,
+              end_date: rfcEndDate,
+              team: selectedTeam,
+              page: page,
+              page_size: prPageSize,
+              members: membersQueryParam,
+            },
+          })
+          .then((response) => {
+            setPullRequests(response.data?.pull_requests || []);
+            setPrTotalCount(response.data?.total_count || 0);
+          })
+          .catch((err) => {
+            console.error("Error fetching pull requests:", err);
+            setPrsError(`Failed to fetch pull requests.`);
+            setPullRequests([]);
+            setPrTotalCount(0);
+          })
+          .finally(() => setLoadingPRs(false))
+      );
 
-    await Promise.all(promises);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTeam, startDate, endDate, prPageSize, teamMembers]); // teamMembers added as a dependency to re-evaluate the initial condition
+      await Promise.all(promises);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedTeam, startDate, endDate, prPageSize, teamMembers, fetchAttempted]
+  );
 
-  // useEffect to fetch stats and PRs when relevant filters change
+  // useEffect to fetch stats and PRs (page 1) when relevant filters change (team, dates, members)
   useEffect(() => {
     if (selectedTeam && startDate && endDate && teamMembers.length > 0) {
-      // This condition ensures members are loaded before attempting to fetch stats/PRs
-      // selectedMemberLogins is now stable after the first member load.
-      // If selectedMemberLogins is empty, it means user deselected all (or it's the brief moment before initial auto-select).
-      // The handleFetchStatsAndPRs will get the latest selectedMemberLogins.
-      handleFetchStatsAndPRs(prCurrentPage, selectedMemberLogins);
+      if (prCurrentPage !== 1) {
+        setPrCurrentPage(1);
+      }
+      handleFetchStatsAndPRs(1, selectedMemberLogins, true);
     } else if (!selectedTeam) {
-        // Clear data if no team is selected (already handled by the other useEffect, but good for safety)
-        setStats(null);
-        setPullRequests([]);
+      setStats(null);
+      setPullRequests([]);
+      setPrTotalCount(0);
+      if (prCurrentPage !== 1) {
+        setPrCurrentPage(1);
+      }
+      setFetchAttempted(false);
+      setError(null);
+      setMembersError(null);
+      setPrsError(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTeam, startDate, endDate, selectedMemberLogins, prCurrentPage]); // Removed teamMembers from here, it's handled by selectedTeam effect setting selectedMemberLogins
+  }, [selectedTeam, startDate, endDate, selectedMemberLogins, teamMembers]);
+
+  // useEffect for PR pagination (when prCurrentPage changes and is > 1)
+  useEffect(() => {
+    if (selectedTeam && startDate && endDate && teamMembers.length > 0 && prCurrentPage > 1 && fetchAttempted) {
+      handleFetchStatsAndPRs(prCurrentPage, selectedMemberLogins, false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prCurrentPage, fetchAttempted, selectedMemberLogins]);
 
 
   const handleToggleMember = useCallback((login) => {
-    setSelectedMemberLogins(prevLogins => {
+    setSelectedMemberLogins((prevLogins) => {
       const newLogins = new Set(prevLogins);
       if (newLogins.has(login)) {
         newLogins.delete(login);
@@ -278,20 +318,21 @@ function App() {
     });
   }, []);
 
-  const handleToggleSelectAllMembers = useCallback((selectAll) => {
-    if (selectAll) {
-      setSelectedMemberLogins(new Set(teamMembers.map(m => m.Member)));
-    } else {
-      setSelectedMemberLogins(new Set());
-    }
-  }, [teamMembers]);
-
+  const handleToggleSelectAllMembers = useCallback(
+    (selectAll) => {
+      if (selectAll) {
+        setSelectedMemberLogins(new Set(teamMembers.map((m) => m.Member)));
+      } else {
+        setSelectedMemberLogins(new Set());
+      }
+    },
+    [teamMembers]
+  );
 
   // Handler for pagination change
   const handlePageChange = (event, newPage) => {
-    // When page changes, we need to pass the current selectedMemberLogins
     if (selectedTeam && startDate && endDate) {
-      handleFetchStatsAndPRs(newPage, selectedMemberLogins);
+      setPrCurrentPage(newPage);
     }
   };
 
@@ -319,19 +360,15 @@ function App() {
           setStartDate={setStartDate}
           endDate={endDate}
           setEndDate={setEndDate}
-          // onFetchStats, loadingStats, isFetchDisabled are removed as fetch is automatic
         />
-        {/* Combined loading indicator, shown when any primary data is loading on initial fetch or team/date change */}
-        {(loadingMembers || loadingStats || loadingPRs) && fetchAttempted && prCurrentPage === 1 && (
+        {(loadingMembers || (loadingStats && prCurrentPage === 1)) && fetchAttempted && (
           <Typography sx={{ my: 2 }}>Loading data...</Typography>
         )}
-        {(error || membersError || prsError) && ( // Check if any error exists
+        {(error || membersError || prsError) && (
           <Typography color="danger" sx={{ mb: 2 }}>
             Error: {error || membersError || prsError}{" "}
-            {/* Show the first non-null error */}
           </Typography>
         )}
-        {/* Render Team Members List */}
         <TeamMembersList
           members={teamMembers}
           loading={loadingMembers}
@@ -342,15 +379,13 @@ function App() {
           onToggleMember={handleToggleMember}
           onToggleSelectAllMembers={handleToggleSelectAllMembers}
         />
-        {/* Render Stats Grid */}
         <StatsGrid
           stats={stats}
-          loadingStats={loadingStats} // Keep separate loading for grid
+          loadingStats={loadingStats}
           selectedTeam={selectedTeam}
           startDate={startDate}
           endDate={endDate}
         />
-        {/* Render Pull Request List */}
         <PullRequestList
           pullRequests={pullRequests}
           loading={loadingPRs}
@@ -360,14 +395,13 @@ function App() {
           endDate={endDate}
           fetchAttempted={fetchAttempted}
         />
-        {/* Render Pagination Controls if fetch attempted and PRs exist */}
         {fetchAttempted && prTotalCount > 0 && (
           <PaginationControls
             currentPage={prCurrentPage}
             pageSize={prPageSize}
             totalCount={prTotalCount}
             onPageChange={handlePageChange}
-            loading={loadingPRs} // Disable controls while loading PRs
+            loading={loadingPRs}
           />
         )}
       </Sheet>

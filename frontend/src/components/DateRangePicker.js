@@ -87,6 +87,53 @@ function DateRangePicker({
     setEndDate(endLastWeek.toISOString().split('T')[0]);
   };
 
+  const handleSetLastTwoWeeks = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to start of day
+
+    const endDateTwoWeeks = new Date(today); // End date is today
+
+    const startDateTwoWeeks = new Date(today);
+    startDateTwoWeeks.setDate(today.getDate() - 13); // 14 days inclusive of today
+
+    setStartDate(startDateTwoWeeks.toISOString().split('T')[0]);
+    setEndDate(endDateTwoWeeks.toISOString().split('T')[0]);
+  };
+
+  const handleSetLastMonth = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const firstDayCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const endDateLastMonth = new Date(firstDayCurrentMonth);
+    endDateLastMonth.setDate(firstDayCurrentMonth.getDate() - 1);
+
+    const startDateLastMonth = new Date(endDateLastMonth.getFullYear(), endDateLastMonth.getMonth(), 1);
+
+    setStartDate(startDateLastMonth.toISOString().split('T')[0]);
+    setEndDate(endDateLastMonth.toISOString().split('T')[0]);
+  };
+
+  const handleSetLastQuarter = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    const firstMonthOfCurrentQuarter = Math.floor(currentMonth / 3) * 3;
+    const firstDayOfCurrentQuarter = new Date(currentYear, firstMonthOfCurrentQuarter, 1);
+
+    const endDateLastQuarter = new Date(firstDayOfCurrentQuarter);
+    endDateLastQuarter.setDate(firstDayOfCurrentQuarter.getDate() - 1);
+
+    // The year for the start of the last quarter is the same as the end date's year.
+    // The first month of the last quarter is two months prior to the last month of the last quarter.
+    const startDateLastQuarter = new Date(endDateLastQuarter.getFullYear(), endDateLastQuarter.getMonth() - 2, 1);
+
+    setStartDate(startDateLastQuarter.toISOString().split('T')[0]);
+    setEndDate(endDateLastQuarter.toISOString().split('T')[0]);
+  };
 
   return (
     <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -116,6 +163,15 @@ function DateRangePicker({
       </IconButton>
       <Button variant="outlined" onClick={handleSetLastWeek} sx={{ ml: 1 }}> {/* Added margin for spacing */}
         Last Week
+      </Button>
+      <Button variant="outlined" onClick={handleSetLastTwoWeeks} sx={{ ml: 1 }}>
+        Last 2 Weeks
+      </Button>
+      <Button variant="outlined" onClick={handleSetLastMonth} sx={{ ml: 1 }}>
+        Last Month
+      </Button>
+      <Button variant="outlined" onClick={handleSetLastQuarter} sx={{ ml: 1 }}>
+        Last Quarter
       </Button>
       {/* Button removed, fetch is automatic */}
     </Box>
