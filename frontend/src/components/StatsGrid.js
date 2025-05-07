@@ -10,6 +10,19 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import RemoveIcon from "@mui/icons-material/Remove";
 import { LineChart, Line, Tooltip, ResponsiveContainer, YAxis } from 'recharts';
 
+// Thresholds for PR size categorization
+const sizeThresholds = { xs: 10, s: 100, m: 500, l: 1000 };
+
+// Helper function to get PR size label
+const getPrSizeLabel = (totalChanges) => {
+  if (totalChanges === null || totalChanges === undefined) return "";
+  if (totalChanges <= sizeThresholds.xs) return "XS";
+  if (totalChanges <= sizeThresholds.s) return "S";
+  if (totalChanges <= sizeThresholds.m) return "M";
+  if (totalChanges <= sizeThresholds.l) return "L";
+  return "XL";
+};
+
 // Helper function to format lead time in seconds for display
 const formatLeadTimeDisplay = (seconds) => {
   if (seconds === null || seconds === undefined || typeof seconds !== 'number') {
@@ -189,6 +202,14 @@ function StatsGrid({ stats, loadingStats, selectedTeam, startDate, endDate }) {
           } else if (item.isPercentage) {
             currentValueDisplay = typeof item.current === 'number' ? `${item.current.toFixed(1)}%` : "N/A";
             previousValueText = typeof item.previous === 'number' ? `(Prev: ${item.previous.toFixed(1)}%)` : "";
+          } else if (item.label === "Avg PR Size (Lines)") {
+            const currentSize = typeof item.current === 'number' ? item.current.toFixed(1) : "N/A";
+            const currentLabel = typeof item.current === 'number' ? getPrSizeLabel(item.current) : "";
+            currentValueDisplay = `${currentSize}${currentLabel ? ` (${currentLabel})` : ""}`;
+
+            const prevSize = typeof item.previous === 'number' ? item.previous.toFixed(1) : "";
+            const prevLabel = typeof item.previous === 'number' ? getPrSizeLabel(item.previous) : "";
+            previousValueText = prevSize ? `(Prev: ${prevSize}${prevLabel ? ` (${prevLabel})` : ""})` : "";
           }
           else {
             currentValueDisplay = typeof item.current === 'number' ? item.current.toLocaleString(undefined, {maximumFractionDigits: 1}) : "N/A";
