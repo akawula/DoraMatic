@@ -34,9 +34,10 @@ type Querier interface {
 	GetAllRepositories(ctx context.Context) ([]Repository, error)
 	// Pull Requests (prs) --
 	GetLastPullRequestMergedDate(ctx context.Context, arg GetLastPullRequestMergedDateParams) (pgtype.Timestamptz, error)
+	GetPullRequestTimeDataForStats(ctx context.Context, arg GetPullRequestTimeDataForStatsParams) ([]GetPullRequestTimeDataForStatsRow, error)
+	GetTeamMemberReviewStatsByDateRange(ctx context.Context, arg GetTeamMemberReviewStatsByDateRangeParams) ([]GetTeamMemberReviewStatsByDateRangeRow, error)
 	GetTeamMembers(ctx context.Context, team string) ([]GetTeamMembersRow, error)
 	// Filter by PR merge date
-	// LEFT JOIN FirstReviewPerPR fr ON p.id = fr.pull_request_id -- Join with first review data -- No longer needed
 	GetTeamPullRequestStatsByDateRange(ctx context.Context, arg GetTeamPullRequestStatsByDateRangeParams) (GetTeamPullRequestStatsByDateRangeRow, error)
 	// Commits --
 	InsertCommit(ctx context.Context, arg InsertCommitParams) error

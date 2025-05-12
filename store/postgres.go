@@ -451,6 +451,34 @@ func (p *Postgres) CountTeamCommitsByDateRange(ctx context.Context, arg sqlc.Cou
 	return count, nil
 }
 
+// GetTeamMemberReviewStatsByDateRange implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) GetTeamMemberReviewStatsByDateRange(ctx context.Context, arg sqlc.GetTeamMemberReviewStatsByDateRangeParams) ([]sqlc.GetTeamMemberReviewStatsByDateRangeRow, error) {
+	rows, err := p.queries.GetTeamMemberReviewStatsByDateRange(ctx, arg)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			p.Logger.Info("No team member review stats found for date range", "params", arg)
+			return []sqlc.GetTeamMemberReviewStatsByDateRangeRow{}, nil // Return empty slice if no rows is not an error
+		}
+		p.Logger.Error("Failed to get team member review stats by date range", "params", arg, "error", err)
+		return nil, err
+	}
+	return rows, nil
+}
+
+// GetPullRequestTimeDataForStats implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) GetPullRequestTimeDataForStats(ctx context.Context, arg sqlc.GetPullRequestTimeDataForStatsParams) ([]sqlc.GetPullRequestTimeDataForStatsRow, error) {
+	rows, err := p.queries.GetPullRequestTimeDataForStats(ctx, arg)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			p.Logger.Info("No PR time data found for stats", "params", arg)
+			return []sqlc.GetPullRequestTimeDataForStatsRow{}, nil
+		}
+		p.Logger.Error("Failed to get PR time data for stats", "params", arg, "error", err)
+		return nil, err
+	}
+	return rows, nil
+}
+
 // DiagnoseLeadTimes implements the Store interface method by calling the generated sqlc query.
 func (p *Postgres) DiagnoseLeadTimes(ctx context.Context) ([]sqlc.DiagnoseLeadTimesRow, error) {
 	results, err := p.queries.DiagnoseLeadTimes(ctx)

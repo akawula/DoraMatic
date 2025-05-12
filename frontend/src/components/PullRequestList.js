@@ -88,11 +88,20 @@ function PullRequestList({
           const dateB = bValue ? new Date(bValue.Time || bValue).getTime() : 0;
           return sortConfig.direction === "ascending" ? dateA - dateB : dateB - dateA;
         }
-        if (["lead_time_to_code_seconds", "lead_time_to_review_seconds", "lead_time_to_merge_seconds"].includes(sortConfig.key)) {
+        if (["lead_time_to_code_seconds", "lead_time_to_review_seconds", "lead_time_to_merge_seconds", "pr_reviews_requested_count"].includes(sortConfig.key)) {
           // Handle null or undefined values by treating them as very large or very small
           // depending on sort direction, to push them to the end/start.
-          const valA = aValue === null || aValue === undefined ? (sortConfig.direction === "ascending" ? Infinity : -Infinity) : aValue;
-          const valB = bValue === null || bValue === undefined ? (sortConfig.direction === "ascending" ? Infinity : -Infinity) : bValue;
+          // For pr_reviews_requested_count, treat null/undefined as 0 for sorting.
+          let valA = aValue;
+          let valB = bValue;
+
+          if (sortConfig.key === "pr_reviews_requested_count") {
+            valA = aValue === null || aValue === undefined ? 0 : aValue;
+            valB = bValue === null || bValue === undefined ? 0 : bValue;
+          } else { // For lead time fields
+            valA = aValue === null || aValue === undefined ? (sortConfig.direction === "ascending" ? Infinity : -Infinity) : aValue;
+            valB = bValue === null || bValue === undefined ? (sortConfig.direction === "ascending" ? Infinity : -Infinity) : bValue;
+          }
           return sortConfig.direction === "ascending" ? valA - valB : valB - valA;
         }
         if (sortConfig.key === "state") {
@@ -206,14 +215,15 @@ function PullRequestList({
           >
             <thead>
               <tr>
-                <th onClick={() => requestSort("title")} style={{ width: "25%" }}>Title{getSortIndicator("title")}</th>
+                <th onClick={() => requestSort("title")} style={{ width: "23%" }}>Title{getSortIndicator("title")}</th>
                 <th onClick={() => requestSort("author")} style={{ width: "10%" }}>Author{getSortIndicator("author")}</th>
-                <th onClick={() => requestSort("repo_name")} style={{ width: "15%" }}>Repository{getSortIndicator("repo_name")}</th>
-                <th onClick={() => requestSort("lead_time_to_code_seconds")} style={{ width: "12%" }}>LT Code{getSortIndicator("lead_time_to_code_seconds")}</th>
-                <th onClick={() => requestSort("lead_time_to_review_seconds")} style={{ width: "12%" }}>LT Review{getSortIndicator("lead_time_to_review_seconds")}</th>
-                <th onClick={() => requestSort("lead_time_to_merge_seconds")} style={{ width: "12%" }}>LT Merge{getSortIndicator("lead_time_to_merge_seconds")}</th>
+                <th onClick={() => requestSort("repo_name")} style={{ width: "14%" }}>Repository{getSortIndicator("repo_name")}</th>
+                <th onClick={() => requestSort("pr_reviews_requested_count")} style={{ width: "8%" }}>Reviews Req.{getSortIndicator("pr_reviews_requested_count")}</th>
+                <th onClick={() => requestSort("lead_time_to_code_seconds")} style={{ width: "10%" }}>LT Code{getSortIndicator("lead_time_to_code_seconds")}</th>
+                <th onClick={() => requestSort("lead_time_to_review_seconds")} style={{ width: "10%" }}>LT Review{getSortIndicator("lead_time_to_review_seconds")}</th>
+                <th onClick={() => requestSort("lead_time_to_merge_seconds")} style={{ width: "10%" }}>LT Merge{getSortIndicator("lead_time_to_merge_seconds")}</th>
                 <th onClick={() => requestSort("state")} style={{ width: "8%" }}>State{getSortIndicator("state")}</th>
-                <th onClick={() => requestSort("size")} style={{ width: "6%" }}>Size{getSortIndicator("size")}</th>
+                <th onClick={() => requestSort("size")} style={{ width: "7%" }}>Size{getSortIndicator("size")}</th>
               </tr>
             </thead>
             <tbody>
@@ -226,6 +236,7 @@ function PullRequestList({
                   </td>
                   <td>{pr.author || "Unknown"}</td>
                   <td>{pr.repo_name || "N/A"}</td>
+                  <td>{pr.pr_reviews_requested_count === null || pr.pr_reviews_requested_count === undefined ? "-" : pr.pr_reviews_requested_count}</td>
                   <td>{formatLeadTime(pr.lead_time_to_code_seconds)}</td>
                   <td>{formatLeadTime(pr.lead_time_to_review_seconds)}</td>
                   <td>{formatLeadTime(pr.lead_time_to_merge_seconds)}</td>

@@ -2,10 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	// "fmt" // No longer needed
 	"log/slog"
-	// "math"     // No longer needed for this specific logic
-	// "math/big" // No longer needed for this specific logic
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +10,7 @@ import (
 
 	"github.com/akawula/DoraMatic/store"
 	"github.com/akawula/DoraMatic/store/sqlc"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Define the response structure based on swagger.yaml
@@ -30,6 +28,7 @@ type PullRequestAPI struct {
 	LeadTimeToCodeSeconds   *int64     `json:"lead_time_to_code_seconds"`   // Use pointer for nullable float64
 	LeadTimeToReviewSeconds *int64     `json:"lead_time_to_review_seconds"` // Use pointer for nullable float64
 	LeadTimeToMergeSeconds  *int64     `json:"lead_time_to_merge_seconds"`  // Use pointer for nullable float64
+	PrReviewsRequestedCount *int32     `json:"pr_reviews_requested_count,omitempty"`
 }
 
 type PullRequestListResponseAPI struct {
@@ -39,8 +38,6 @@ type PullRequestListResponseAPI struct {
 	PageSize     int              `json:"page_size"`
 }
 
-// calculateOffset moved to store/base.go, ensure it's accessible or redefine if needed.
-// For simplicity here, let's redefine it locally if not easily importable.
 func calculateOffset(page, limit int) int {
 	if page <= 0 {
 		page = 1
@@ -48,8 +45,6 @@ func calculateOffset(page, limit int) int {
 	offset := (page - 1) * limit
 	return offset
 }
-
-// getInt64FromInterface function is removed as it's no longer needed.
 
 func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -134,8 +129,7 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 			return
 		}
 
-		// Andrew here!
-		logger.Info("Fetched pull requests from DB", "prs", dbPRs)
+		// logger.Info("Fetched pull requests from DB", "prs", dbPRs)
 
 		logger.Debug("Counting pull requests", "params", countParams)
 		totalCount, err := db.CountPullRequests(ctx, countParams)
@@ -149,53 +143,68 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 		apiPRs := make([]PullRequestAPI, 0, len(dbPRs))
 		for _, dbPR := range dbPRs {
 			var mergedAtPtr *time.Time
-			// Assuming dbPR.MergedAt is sql.NullTime or similar after sqlc generation
-			// If it's pgtype.Timestamptz, the import removal was wrong. Let's assume sql.NullTime for now.
-			// Re-check sqlc generated types if this causes issues.
-			// if dbPR.MergedAt.Valid { // Example if it were sql.NullTime
-			// 	mergedAtPtr = &dbPR.MergedAt.Time
-			// }
-			// Correction: The sqlc generated type for nullable timestamp is pgtype.Timestamptz
-			// The compiler error about unused import might be incorrect or delayed.
-			// Let's keep the logic using pgtype.Timestamptz as it was correct.
-			if dbPR.MergedAt.Valid { // dbPR.MergedAt is pgtype.Timestamptz
-				mergedAtPtr = &dbPR.MergedAt.Time
+			if dbPR.PrMergedAt.Valid {
+				mergedAtPtr = &dbPR.PrMergedAt.Time
 			}
-
-			// Debug printf line removed.
 
 			apiPR := PullRequestAPI{
-				ID:        dbPR.ID,                    // ID is string in sqlc row
-				RepoName:  dbPR.RepositoryName.String, // pgtype.Text -> string
-				Title:     dbPR.Title.String,          // sql.NullString -> string
-				Author:    dbPR.Author.String,         // pgtype.Text -> string
-				State:     dbPR.State.String,          // pgtype.Text -> string
-				CreatedAt: dbPR.CreatedAt,             // time.Time
-				MergedAt:  mergedAtPtr,                // *time.Time
-				Additions: dbPR.Additions.Int32,       // pgtype.Int4 -> int32
-				Deletions: dbPR.Deletions.Int32,       // pgtype.Int4 -> int32
-				URL:       dbPR.Url.String,            // sql.NullString -> string
-				// LeadTime fields will be sql.NullFloat64 or similar from sqlc
+				ID:        dbPR.ID,
+				RepoName:  dbPR.RepositoryName.String,
+				Title:     dbPR.Title.String,
+				Author:    dbPR.Author.String,
+				State:     dbPR.State.String,
+				CreatedAt: dbPR.PrCreatedAt,
+				MergedAt:  mergedAtPtr,
+				Additions: dbPR.Additions.Int32,
+				Deletions: dbPR.Deletions.Int32,
+				URL:       dbPR.Url.String,
+				// PrReviewsRequestedCount will be populated below
 			}
 
-			// Handle lead time fields (now float64 from sqlc)
-			// Convert to *int64 for the API response.
-			// If the SQL returned 0.0 (our ELSE case), this will become 0 in JSON.
-			// If the API requires 'null' for 0.0, further logic would be needed here to set the pointer to nil if val is 0.
-			// For now, 0.0 from DB will become 0 in JSON.
-			valLTTCS := int64(dbPR.LeadTimeToCodeSeconds)
-			apiPR.LeadTimeToCodeSeconds = &valLTTCS
+			// Populate PrReviewsRequestedCount
+			// Assuming dbPR.PrReviewsRequestedCount is pgtype.Int4 after sqlc generate
+			if dbPR.PrReviewsRequestedCount.Valid {
+				val := dbPR.PrReviewsRequestedCount.Int32
+				apiPR.PrReviewsRequestedCount = &val
+			}
 
-			valLTTRS := int64(dbPR.LeadTimeToReviewSeconds)
-			apiPR.LeadTimeToReviewSeconds = &valLTTRS
 
-			valLTTMS := int64(dbPR.LeadTimeToMergeSeconds)
-			apiPR.LeadTimeToMergeSeconds = &valLTTMS
+			if dbPR.LeadTimeToCodeSeconds != nil {
+				if pgNum, ok := dbPR.LeadTimeToCodeSeconds.(pgtype.Numeric); ok {
+					if pgNum.Valid {
+						pgF8, err := pgNum.Float64Value()
+						if err == nil && pgF8.Valid {
+							valInt := int64(pgF8.Float64)
+							apiPR.LeadTimeToCodeSeconds = &valInt
+						}
+					}
+				}
+			}
 
-			// Add Valid checks if needed for non-nullable API fields mapped from nullable DB fields
-			// Check validity for additions and deletions (assuming they are nullable in DB, though query doesn't show it)
-			// If sqlc generated them as non-nullable int32, these checks are not needed.
-			// Let's assume they are nullable pgtype.Int4 based on other fields.
+			if dbPR.LeadTimeToReviewSeconds != nil {
+				if pgNum, ok := dbPR.LeadTimeToReviewSeconds.(pgtype.Numeric); ok {
+					if pgNum.Valid {
+						pgF8, err := pgNum.Float64Value()
+						if err == nil && pgF8.Valid {
+							valInt := int64(pgF8.Float64)
+							apiPR.LeadTimeToReviewSeconds = &valInt
+						}
+					}
+				}
+			}
+
+			if dbPR.LeadTimeToMergeSeconds != nil {
+				if pgNum, ok := dbPR.LeadTimeToMergeSeconds.(pgtype.Numeric); ok {
+					if pgNum.Valid {
+						pgF8, err := pgNum.Float64Value()
+						if err == nil && pgF8.Valid {
+							valInt := int64(pgF8.Float64)
+							apiPR.LeadTimeToMergeSeconds = &valInt
+						}
+					}
+				}
+			}
+
 			if !dbPR.Additions.Valid {
 				apiPR.Additions = 0 // Default to 0 if null
 			}

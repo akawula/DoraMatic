@@ -51,6 +51,10 @@ type MockStore struct {
 	GetTeamMembersFunc                   func(ctx context.Context, team string) ([]sqlc.GetTeamMembersRow, error)
 	// New method for diagnosing lead times
 	DiagnoseLeadTimesFunc                func(ctx context.Context) ([]sqlc.DiagnoseLeadTimesRow, error)
+	// New method for PR time data
+	GetPullRequestTimeDataForStatsFunc func(ctx context.Context, arg sqlc.GetPullRequestTimeDataForStatsParams) ([]sqlc.GetPullRequestTimeDataForStatsRow, error)
+	// New method for team member review stats
+	GetTeamMemberReviewStatsByDateRangeFunc func(ctx context.Context, arg sqlc.GetTeamMemberReviewStatsByDateRangeParams) ([]sqlc.GetTeamMemberReviewStatsByDateRangeRow, error)
 
 	// Add fields to track calls if needed
 	SaveTeamsCalled                      bool
@@ -64,6 +68,8 @@ type MockStore struct {
 	CountPullRequestsCalled              bool
 	GetTeamMembersCalled                 bool
 	DiagnoseLeadTimesCalled              bool
+	GetPullRequestTimeDataForStatsCalled bool
+	GetTeamMemberReviewStatsByDateRangeCalled bool
 }
 
 // Updated SaveTeams method signature
@@ -167,6 +173,24 @@ func (m *MockStore) DiagnoseLeadTimes(ctx context.Context) ([]sqlc.DiagnoseLeadT
 		return m.DiagnoseLeadTimesFunc(ctx)
 	}
 	return []sqlc.DiagnoseLeadTimesRow{}, nil // Default mock behavior
+}
+
+// Implement GetPullRequestTimeDataForStats for MockStore
+func (m *MockStore) GetPullRequestTimeDataForStats(ctx context.Context, arg sqlc.GetPullRequestTimeDataForStatsParams) ([]sqlc.GetPullRequestTimeDataForStatsRow, error) {
+	m.GetPullRequestTimeDataForStatsCalled = true
+	if m.GetPullRequestTimeDataForStatsFunc != nil {
+		return m.GetPullRequestTimeDataForStatsFunc(ctx, arg)
+	}
+	return []sqlc.GetPullRequestTimeDataForStatsRow{}, nil // Default mock behavior
+}
+
+// Implement GetTeamMemberReviewStatsByDateRange for MockStore
+func (m *MockStore) GetTeamMemberReviewStatsByDateRange(ctx context.Context, arg sqlc.GetTeamMemberReviewStatsByDateRangeParams) ([]sqlc.GetTeamMemberReviewStatsByDateRangeRow, error) {
+	m.GetTeamMemberReviewStatsByDateRangeCalled = true
+	if m.GetTeamMemberReviewStatsByDateRangeFunc != nil {
+		return m.GetTeamMemberReviewStatsByDateRangeFunc(ctx, arg)
+	}
+	return []sqlc.GetTeamMemberReviewStatsByDateRangeRow{}, nil // Default mock behavior
 }
 
 // Mock function types for GitHub interactions

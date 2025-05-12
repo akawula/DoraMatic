@@ -18,8 +18,7 @@ SELECT COUNT(p.*)::int -- Count distinct PRs
 FROM prs p
 LEFT JOIN teams t ON p.author = t.member -- Join with teams table
 WHERE
-    p.state = 'MERGED' -- Only count merged PRs when filtering by merged_at
-    AND p.merged_at >= $1::timestamptz
+    p.merged_at >= $1::timestamptz -- Ensure this matches ListPullRequests criteria
     AND p.merged_at <= $2::timestamptz
     AND ( -- Filter by search term (title or author)
         $3::text = '' OR
@@ -327,6 +326,169 @@ func (q *Queries) GetLastPullRequestMergedDate(ctx context.Context, arg GetLastP
 	return merged_at, err
 }
 
+const getPullRequestTimeDataForStats = `-- name: GetPullRequestTimeDataForStats :many
+WITH FirstCommitPerPR AS (
+    SELECT
+        pr_id,
+        MIN(created_at) as first_commit_at
+    FROM commits
+    GROUP BY pr_id
+),
+FirstActualReviewPerPR AS (
+    SELECT
+        pull_request_id,
+        MIN(submitted_at) as first_actual_review_at
+    FROM pull_request_reviews
+    WHERE state = 'APPROVED' OR state = 'CHANGES_REQUESTED'
+    GROUP BY pull_request_id
+)
+SELECT
+    p.id AS pr_id,
+    p.created_at AS pr_created_at,
+    p.state AS pr_state,
+    p.merged_at AS pr_merged_at,
+    p.review_requested_at AS pr_review_requested_at,
+    p.reviews_requested AS pr_reviews_requested, -- Added for avg reviews requested count
+    fc.first_commit_at,
+    far.first_actual_review_at
+FROM prs p
+LEFT JOIN teams t ON p.author = t.member -- Join with teams to filter by team_name
+LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id
+LEFT JOIN FirstActualReviewPerPR far ON p.id = far.pull_request_id
+WHERE
+    t.team = $1
+    AND ($2::text[] IS NULL OR p.author = ANY($2::text[]))
+    AND (
+        -- Include PRs relevant for any lead time calculation or stats within the period
+        -- Merged PRs within the period
+        (p.state = 'MERGED' AND p.merged_at >= $3::timestamptz AND p.merged_at <= $4::timestamptz) OR
+        -- PRs created within the period (relevant for 'time to code', 'time to first review' even if not merged in period)
+        (p.created_at >= $3::timestamptz AND p.created_at <= $4::timestamptz) OR
+        -- PRs that had review requested within the period
+        (p.review_requested_at >= $3::timestamptz AND p.review_requested_at <= $4::timestamptz)
+        -- Note: This might fetch more PRs than strictly needed for *averages* if averages are only for merged PRs.
+        -- The Go code will need to filter appropriately for each specific metric.
+    )
+`
+
+type GetPullRequestTimeDataForStatsParams struct {
+	TeamName  string    `db:"team_name"`
+	Members   []string  `db:"members"`
+	StartDate time.Time `db:"start_date"`
+	EndDate   time.Time `db:"end_date"`
+}
+
+type GetPullRequestTimeDataForStatsRow struct {
+	PrID                string             `db:"pr_id"`
+	PrCreatedAt         time.Time          `db:"pr_created_at"`
+	PrState             pgtype.Text        `db:"pr_state"`
+	PrMergedAt          pgtype.Timestamptz `db:"pr_merged_at"`
+	PrReviewRequestedAt pgtype.Timestamptz `db:"pr_review_requested_at"`
+	PrReviewsRequested  pgtype.Int4        `db:"pr_reviews_requested"`
+	FirstCommitAt       interface{}        `db:"first_commit_at"`
+	FirstActualReviewAt interface{}        `db:"first_actual_review_at"`
+}
+
+func (q *Queries) GetPullRequestTimeDataForStats(ctx context.Context, arg GetPullRequestTimeDataForStatsParams) ([]GetPullRequestTimeDataForStatsRow, error) {
+	rows, err := q.db.Query(ctx, getPullRequestTimeDataForStats,
+		arg.TeamName,
+		arg.Members,
+		arg.StartDate,
+		arg.EndDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPullRequestTimeDataForStatsRow{}
+	for rows.Next() {
+		var i GetPullRequestTimeDataForStatsRow
+		if err := rows.Scan(
+			&i.PrID,
+			&i.PrCreatedAt,
+			&i.PrState,
+			&i.PrMergedAt,
+			&i.PrReviewRequestedAt,
+			&i.PrReviewsRequested,
+			&i.FirstCommitAt,
+			&i.FirstActualReviewAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTeamMemberReviewStatsByDateRange = `-- name: GetTeamMemberReviewStatsByDateRange :many
+SELECT
+    prr.author_login,
+    COUNT(prr.id) AS total_reviews_submitted,
+    SUM(CASE WHEN prr.state = 'APPROVED' THEN 1 ELSE 0 END) AS approved_reviews,
+    SUM(CASE WHEN prr.state = 'CHANGES_REQUESTED' THEN 1 ELSE 0 END) AS changes_requested_reviews,
+    SUM(CASE WHEN prr.state = 'COMMENTED' THEN 1 ELSE 0 END) AS commented_reviews
+FROM
+    pull_request_reviews prr
+INNER JOIN teams t ON prr.author_login = t.member -- Ensure reviewer is in the specified team
+WHERE t.team = $1
+  AND ($2::text[] IS NULL OR prr.author_login = ANY($2::text[])) -- Further filter by selected members if provided
+  AND prr.submitted_at >= $3::timestamptz
+  AND prr.submitted_at <= $4::timestamptz
+GROUP BY
+    prr.author_login
+ORDER BY
+    total_reviews_submitted DESC
+`
+
+type GetTeamMemberReviewStatsByDateRangeParams struct {
+	TeamName  string    `db:"team_name"`
+	Members   []string  `db:"members"`
+	StartDate time.Time `db:"start_date"`
+	EndDate   time.Time `db:"end_date"`
+}
+
+type GetTeamMemberReviewStatsByDateRangeRow struct {
+	AuthorLogin             sql.NullString `db:"author_login"`
+	TotalReviewsSubmitted   int64          `db:"total_reviews_submitted"`
+	ApprovedReviews         int64          `db:"approved_reviews"`
+	ChangesRequestedReviews int64          `db:"changes_requested_reviews"`
+	CommentedReviews        int64          `db:"commented_reviews"`
+}
+
+func (q *Queries) GetTeamMemberReviewStatsByDateRange(ctx context.Context, arg GetTeamMemberReviewStatsByDateRangeParams) ([]GetTeamMemberReviewStatsByDateRangeRow, error) {
+	rows, err := q.db.Query(ctx, getTeamMemberReviewStatsByDateRange,
+		arg.TeamName,
+		arg.Members,
+		arg.StartDate,
+		arg.EndDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTeamMemberReviewStatsByDateRangeRow{}
+	for rows.Next() {
+		var i GetTeamMemberReviewStatsByDateRangeRow
+		if err := rows.Scan(
+			&i.AuthorLogin,
+			&i.TotalReviewsSubmitted,
+			&i.ApprovedReviews,
+			&i.ChangesRequestedReviews,
+			&i.CommentedReviews,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTeamMembers = `-- name: GetTeamMembers :many
 SELECT member, avatar_url
 FROM teams
@@ -367,6 +529,25 @@ WITH FirstCommitPerPR AS (
         MIN(created_at) as first_commit_at
     FROM commits
     GROUP BY pr_id
+),
+FirstActualReviewPerPR AS (
+    SELECT
+        pull_request_id,
+        MIN(submitted_at) as first_actual_review_at
+    FROM pull_request_reviews
+    WHERE state = 'APPROVED' OR state = 'CHANGES_REQUESTED' -- Consider only substantive reviews
+    GROUP BY pull_request_id
+),
+TeamMemberReviewStats AS (
+    SELECT
+        COUNT(prr.id) AS total_team_reviews_submitted_val,
+        COUNT(DISTINCT prr.author_login) AS distinct_team_reviewers_count_val
+    FROM pull_request_reviews prr
+    INNER JOIN teams t_rev ON prr.author_login = t_rev.member
+    WHERE t_rev.team = $3
+      AND ($4::text[] IS NULL OR prr.author_login = ANY($4::text[]))
+      AND prr.submitted_at >= $1::timestamptz
+      AND prr.submitted_at <= $2::timestamptz
 )
 SELECT
     COUNT(CASE WHEN p.state = 'MERGED' AND p.merged_at >= $1::timestamptz AND p.merged_at <= $2::timestamptz THEN 1 END)::int AS merged_count,
@@ -415,11 +596,32 @@ SELECT
             ELSE NULL
         END
     )::int AS count_prs_for_avg_lead_time_to_merge,
+    -- Calculate average time to first actual review in seconds
+    COALESCE(AVG(
+        CASE
+            -- Only include PRs that have a first commit and a first actual review, and review happened after commit
+            WHEN far.first_actual_review_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND far.first_actual_review_at > fc.first_commit_at
+            THEN EXTRACT(EPOCH FROM (far.first_actual_review_at - fc.first_commit_at))
+            ELSE NULL
+        END
+    ), 0)::float AS avg_time_to_first_actual_review_seconds,
+    -- Count PRs contributing to the average time to first actual review
+    COUNT(
+        CASE
+            WHEN far.first_actual_review_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND far.first_actual_review_at > fc.first_commit_at
+            THEN 1
+            ELSE NULL
+        END
+    )::int AS count_prs_for_avg_time_to_first_actual_review,
     COALESCE(SUM(CASE WHEN p.state = 'MERGED' AND p.merged_at >= $1::timestamptz AND p.merged_at <= $2::timestamptz THEN p.additions ELSE 0 END), 0)::bigint AS total_additions,
-    COALESCE(SUM(CASE WHEN p.state = 'MERGED' AND p.merged_at >= $1::timestamptz AND p.merged_at <= $2::timestamptz THEN p.deletions ELSE 0 END), 0)::bigint AS total_deletions
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' AND p.merged_at >= $1::timestamptz AND p.merged_at <= $2::timestamptz THEN p.deletions ELSE 0 END), 0)::bigint AS total_deletions,
+    COALESCE(MAX(tmrs.total_team_reviews_submitted_val), 0)::bigint AS total_team_reviews_submitted,
+    COALESCE(MAX(tmrs.distinct_team_reviewers_count_val), 0)::int AS distinct_team_reviewers_count
 FROM prs p
 JOIN teams t ON p.author = t.member
 LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id
+LEFT JOIN FirstActualReviewPerPR far ON p.id = far.pull_request_id -- Join with first actual review data
+CROSS JOIN TeamMemberReviewStats tmrs
 WHERE t.team = $3
   AND ($4::text[] IS NULL OR p.author = ANY($4::text[])) -- Filter by selected members
   AND (
@@ -436,20 +638,23 @@ type GetTeamPullRequestStatsByDateRangeParams struct {
 }
 
 type GetTeamPullRequestStatsByDateRangeRow struct {
-	MergedCount                   int32   `db:"merged_count"`
-	ClosedCount                   int32   `db:"closed_count"`
-	RollbacksCount                int32   `db:"rollbacks_count"`
-	AvgLeadTimeToCodeSeconds      float64 `db:"avg_lead_time_to_code_seconds"`
-	CountPrsForAvgLeadTime        int32   `db:"count_prs_for_avg_lead_time"`
-	AvgLeadTimeToReviewSeconds    float64 `db:"avg_lead_time_to_review_seconds"`
-	AvgLeadTimeToMergeSeconds     float64 `db:"avg_lead_time_to_merge_seconds"`
-	CountPrsForAvgLeadTimeToMerge int32   `db:"count_prs_for_avg_lead_time_to_merge"`
-	TotalAdditions                int64   `db:"total_additions"`
-	TotalDeletions                int64   `db:"total_deletions"`
+	MergedCount                           int32   `db:"merged_count"`
+	ClosedCount                           int32   `db:"closed_count"`
+	RollbacksCount                        int32   `db:"rollbacks_count"`
+	AvgLeadTimeToCodeSeconds              float64 `db:"avg_lead_time_to_code_seconds"`
+	CountPrsForAvgLeadTime                int32   `db:"count_prs_for_avg_lead_time"`
+	AvgLeadTimeToReviewSeconds            float64 `db:"avg_lead_time_to_review_seconds"`
+	AvgLeadTimeToMergeSeconds             float64 `db:"avg_lead_time_to_merge_seconds"`
+	CountPrsForAvgLeadTimeToMerge         int32   `db:"count_prs_for_avg_lead_time_to_merge"`
+	AvgTimeToFirstActualReviewSeconds     float64 `db:"avg_time_to_first_actual_review_seconds"`
+	CountPrsForAvgTimeToFirstActualReview int32   `db:"count_prs_for_avg_time_to_first_actual_review"`
+	TotalAdditions                        int64   `db:"total_additions"`
+	TotalDeletions                        int64   `db:"total_deletions"`
+	TotalTeamReviewsSubmitted             int64   `db:"total_team_reviews_submitted"`
+	DistinctTeamReviewersCount            int32   `db:"distinct_team_reviewers_count"`
 }
 
 // Filter by PR merge date
-// LEFT JOIN FirstReviewPerPR fr ON p.id = fr.pull_request_id -- Join with first review data -- No longer needed
 func (q *Queries) GetTeamPullRequestStatsByDateRange(ctx context.Context, arg GetTeamPullRequestStatsByDateRangeParams) (GetTeamPullRequestStatsByDateRangeRow, error) {
 	row := q.db.QueryRow(ctx, getTeamPullRequestStatsByDateRange,
 		arg.StartDate,
@@ -467,8 +672,12 @@ func (q *Queries) GetTeamPullRequestStatsByDateRange(ctx context.Context, arg Ge
 		&i.AvgLeadTimeToReviewSeconds,
 		&i.AvgLeadTimeToMergeSeconds,
 		&i.CountPrsForAvgLeadTimeToMerge,
+		&i.AvgTimeToFirstActualReviewSeconds,
+		&i.CountPrsForAvgTimeToFirstActualReview,
 		&i.TotalAdditions,
 		&i.TotalDeletions,
+		&i.TotalTeamReviewsSubmitted,
+		&i.DistinctTeamReviewersCount,
 	)
 	return i, err
 }
@@ -507,63 +716,58 @@ WITH FirstCommitPerPR AS (
     FROM commits
     GROUP BY pr_id
 ),
-PRsWithLeadTimes AS (
+FirstActualReviewPerPR AS ( -- Added for consistency, though not directly used for display yet
     SELECT
-        p.id,
-        p.repository_name,
-        p.title,
-        p.author,
-        p.state,
-        p.created_at,
-        p.merged_at,
-        p.additions,
-        p.deletions,
-        p.url,
-        p.review_requested_at, -- Needed for calculation
-        fc.first_commit_at,    -- From CTE
-        CASE
-            WHEN p.review_requested_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND p.review_requested_at > fc.first_commit_at
-            THEN (EXTRACT(EPOCH FROM p.review_requested_at) - EXTRACT(EPOCH FROM fc.first_commit_at))
-            ELSE 0.0 -- Changed from NULL
-        END::DOUBLE PRECISION AS lead_time_to_code_seconds,
-        CASE
-            WHEN p.merged_at IS NOT NULL AND p.review_requested_at IS NOT NULL AND p.review_requested_at < p.merged_at
-            THEN (EXTRACT(EPOCH FROM p.merged_at) - EXTRACT(EPOCH FROM p.review_requested_at))
-            ELSE 0.0 -- Changed from NULL
-        END::DOUBLE PRECISION AS lead_time_to_review_seconds,
-        CASE
-            WHEN p.merged_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND fc.first_commit_at < p.merged_at
-            THEN EXTRACT(EPOCH FROM (p.merged_at - fc.first_commit_at))
-            ELSE 0.0 -- Changed from NULL
-        END::DOUBLE PRECISION AS lead_time_to_merge_seconds
-    FROM prs p
-    LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id
-    -- LEFT JOIN FirstReviewPerPR fr ON p.id = fr.pull_request_id -- No longer needed
+        pull_request_id,
+        MIN(submitted_at) as first_actual_review_at
+    FROM pull_request_reviews
+    WHERE state = 'APPROVED' OR state = 'CHANGES_REQUESTED'
+    GROUP BY pull_request_id
 )
 SELECT
-    pr_lt.id,
-    pr_lt.repository_name,
-    pr_lt.title,
-    pr_lt.author,
-    pr_lt.state,
-    pr_lt.created_at,
-    pr_lt.merged_at,
-    pr_lt.additions,
-    pr_lt.deletions,
-    pr_lt.url,
-    pr_lt.lead_time_to_code_seconds,
-    pr_lt.lead_time_to_review_seconds,
-    pr_lt.lead_time_to_merge_seconds
-FROM PRsWithLeadTimes pr_lt
-LEFT JOIN teams t ON pr_lt.author = t.member -- Join with teams table for filtering
+    p.id,
+    p.repository_name,
+    p.title,
+    p.author,
+    p.state,
+    p.created_at AS pr_created_at, -- Renamed for clarity
+    p.merged_at AS pr_merged_at,   -- Renamed for clarity
+    p.additions,
+    p.deletions,
+    p.url,
+    p.review_requested_at AS pr_review_requested_at, -- Renamed for clarity
+    p.reviews_requested AS pr_reviews_requested_count, -- Added for PR list display
+    fc.first_commit_at,
+    far.first_actual_review_at, -- Added for potential future use or if Go calculates all lead times
+    CASE
+        WHEN p.review_requested_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND p.review_requested_at > fc.first_commit_at
+        THEN EXTRACT(EPOCH FROM (p.review_requested_at - fc.first_commit_at))
+        ELSE NULL
+    END AS lead_time_to_code_seconds,
+    CASE
+        WHEN p.state = 'MERGED' AND p.merged_at IS NOT NULL AND p.review_requested_at IS NOT NULL AND p.review_requested_at < p.merged_at
+        THEN EXTRACT(EPOCH FROM (p.merged_at - p.review_requested_at))
+        ELSE NULL
+    END AS lead_time_to_review_seconds,
+    CASE
+        WHEN p.state = 'MERGED' AND p.merged_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND fc.first_commit_at < p.merged_at
+        THEN EXTRACT(EPOCH FROM (p.merged_at - fc.first_commit_at))
+        ELSE NULL
+    END AS lead_time_to_merge_seconds
+FROM prs p
+LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id
+LEFT JOIN FirstActualReviewPerPR far ON p.id = far.pull_request_id -- Joined
+LEFT JOIN teams t ON p.author = t.member -- Join with teams table for filtering
 WHERE
-    pr_lt.state = 'MERGED' -- Only show merged PRs when filtering by merged_at
-    AND pr_lt.merged_at >= $1::timestamptz
-    AND pr_lt.merged_at <= $2::timestamptz
+    -- Date filtering should apply to the primary event defining the list, e.g., merged_at or created_at
+    -- For this example, let's assume filtering by merged_at for a list of merged PRs.
+    -- Adjust as needed if the list criteria change (e.g., all open PRs, PRs created in range).
+    p.merged_at >= $1::timestamptz
+    AND p.merged_at <= $2::timestamptz
     AND ( -- Filter by search term (title or author)
         $3::text = '' OR
-        pr_lt.title ILIKE '%' || $3::text || '%' OR
-        pr_lt.author ILIKE '%' || $3::text || '%'
+        p.title ILIKE '%' || $3::text || '%' OR
+        p.author ILIKE '%' || $3::text || '%'
     )
     AND ( -- Optionally filter by team name
         $4::text = '' OR
@@ -571,14 +775,14 @@ WHERE
     )
     AND ( -- Optionally filter by state
         $5::text = '' OR
-        pr_lt.state ILIKE '%' || $5::text || '%' -- Use ILIKE for state as well for consistency, though direct equals is fine if state is exact
+        p.state ILIKE '%' || $5::text || '%'
     )
     AND ( -- Optionally filter by author (case-insensitive)
         $6::text = '' OR
-        pr_lt.author ILIKE '%' || $6::text || '%'
+        p.author ILIKE '%' || $6::text || '%'
     )
-    AND ($7::text[] IS NULL OR pr_lt.author = ANY($7::text[])) -- Filter by selected members
-ORDER BY pr_lt.merged_at DESC -- Default sort by merged_at
+    AND ($7::text[] IS NULL OR p.author = ANY($7::text[])) -- Filter by selected members
+ORDER BY p.merged_at DESC -- Default sort by merged_at
 LIMIT $9::int
 OFFSET $8::int
 `
@@ -601,14 +805,18 @@ type ListPullRequestsRow struct {
 	Title                   sql.NullString     `db:"title"`
 	Author                  pgtype.Text        `db:"author"`
 	State                   pgtype.Text        `db:"state"`
-	CreatedAt               time.Time          `db:"created_at"`
-	MergedAt                pgtype.Timestamptz `db:"merged_at"`
+	PrCreatedAt             time.Time          `db:"pr_created_at"`
+	PrMergedAt              pgtype.Timestamptz `db:"pr_merged_at"`
 	Additions               pgtype.Int4        `db:"additions"`
 	Deletions               pgtype.Int4        `db:"deletions"`
 	Url                     sql.NullString     `db:"url"`
-	LeadTimeToCodeSeconds   float64            `db:"lead_time_to_code_seconds"`
-	LeadTimeToReviewSeconds float64            `db:"lead_time_to_review_seconds"`
-	LeadTimeToMergeSeconds  float64            `db:"lead_time_to_merge_seconds"`
+	PrReviewRequestedAt     pgtype.Timestamptz `db:"pr_review_requested_at"`
+	PrReviewsRequestedCount pgtype.Int4        `db:"pr_reviews_requested_count"`
+	FirstCommitAt           interface{}        `db:"first_commit_at"`
+	FirstActualReviewAt     interface{}        `db:"first_actual_review_at"`
+	LeadTimeToCodeSeconds   interface{}        `db:"lead_time_to_code_seconds"`
+	LeadTimeToReviewSeconds interface{}        `db:"lead_time_to_review_seconds"`
+	LeadTimeToMergeSeconds  interface{}        `db:"lead_time_to_merge_seconds"`
 }
 
 // List Pull Requests (Paginated & Searchable by Title/Author and optionally Team) --
@@ -637,11 +845,15 @@ func (q *Queries) ListPullRequests(ctx context.Context, arg ListPullRequestsPara
 			&i.Title,
 			&i.Author,
 			&i.State,
-			&i.CreatedAt,
-			&i.MergedAt,
+			&i.PrCreatedAt,
+			&i.PrMergedAt,
 			&i.Additions,
 			&i.Deletions,
 			&i.Url,
+			&i.PrReviewRequestedAt,
+			&i.PrReviewsRequestedCount,
+			&i.FirstCommitAt,
+			&i.FirstActualReviewAt,
 			&i.LeadTimeToCodeSeconds,
 			&i.LeadTimeToReviewSeconds,
 			&i.LeadTimeToMergeSeconds,

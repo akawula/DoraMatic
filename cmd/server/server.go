@@ -16,9 +16,23 @@ import (
 	_ "github.com/lib/pq"                // PostgreSQL driver needed by pgx? Check pgx docs. Keep for now.
 )
 
+func debug() slog.Level {
+	level := slog.LevelInfo
+	if os.Getenv("DEBUG") == "1" {
+		level = slog.LevelDebug
+	}
+	return level
+}
+
+func logger() *slog.Logger {
+	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: debug(),
+	}))
+}
+
 func main() {
 	// --- Logger Initialization ---
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := logger()
 	// --- End Logger Initialization ---
 
 	// --- Database Connection Initialization ---
@@ -73,7 +87,7 @@ func main() {
 	// Register the new diagnostic handler
 	http.HandleFunc("GET /diagnose/leadtimes", handlers.DiagnoseLeadTimesHandler(dbStore))
 
-	port := "10000" // Default port, can be overridden by env var later if needed
+	port := "10000"                              // Default port, can be overridden by env var later if needed
 	logger.Info("Server starting", "port", port) // Use structured logging
 
 	// Fix assignment: use '=' instead of ':=' as err is already declared

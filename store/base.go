@@ -55,6 +55,12 @@ type Store interface {
 
 	// New method for diagnosing lead times
 	DiagnoseLeadTimes(ctx context.Context) ([]sqlc.DiagnoseLeadTimesRow, error)
+
+	// New method for fetching raw PR time data for lead time calculations
+	GetPullRequestTimeDataForStats(ctx context.Context, arg sqlc.GetPullRequestTimeDataForStatsParams) ([]sqlc.GetPullRequestTimeDataForStatsRow, error)
+
+	// New method for fetching team member review stats
+	GetTeamMemberReviewStatsByDateRange(ctx context.Context, arg sqlc.GetTeamMemberReviewStatsByDateRangeParams) ([]sqlc.GetTeamMemberReviewStatsByDateRangeRow, error)
 	// Removed duplicate Close()
 }
 

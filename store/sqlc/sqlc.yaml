@@ -18,27 +18,34 @@ sql:
             go_type: "time.Time"
           - db_type: "timestamp"
             go_type: "time.Time"
+          - db_type: "float8" # PostgreSQL's double precision
+            nullable: true
+            go_type:
+              import: "github.com/jackc/pgx/v5/pgtype"
+              type: "Float8"
           - db_type: "text"
             nullable: true
             go_type:
               import: "database/sql"
               type: "NullString"
           # Column-specific overrides for calculated lead time fields from the ListPullRequests query
-          - column: "ListPullRequests.lead_time_to_code_seconds" # QueryName.ColumnAlias
-            nullable: true
-            go_type:
-              import: "github.com/jackc/pgx/v5/pgtype"
-              type: "Float8"
-          - column: "ListPullRequests.lead_time_to_review_seconds" # QueryName.ColumnAlias
-            nullable: true
-            go_type:
-              import: "github.com/jackc/pgx/v5/pgtype"
-              type: "Float8"
-          - column: "ListPullRequests.lead_time_to_merge_seconds" # QueryName.ColumnAlias
-            nullable: true
-            go_type:
-              import: "github.com/jackc/pgx/v5/pgtype"
-              type: "Float8"
+          # Removing these as they don't seem to be working as expected for calculated CASE statement columns.
+          # Relying on the db_type: "float8" override above.
+          # - column: "ListPullRequests.lead_time_to_code_seconds" # QueryName.ColumnAlias
+          #   nullable: true
+          #   go_type:
+          #     import: "github.com/jackc/pgx/v5/pgtype"
+          #     type: "Float8"
+          # - column: "ListPullRequests.lead_time_to_review_seconds" # QueryName.ColumnAlias
+          #   nullable: true
+          #   go_type:
+          #     import: "github.com/jackc/pgx/v5/pgtype"
+          #     type: "Float8"
+          # - column: "ListPullRequests.lead_time_to_merge_seconds" # QueryName.ColumnAlias
+          #   nullable: true
+          #   go_type:
+          #     import: "github.com/jackc/pgx/v5/pgtype"
+          #     type: "Float8"
           - db_type: "varchar"
             nullable: true
             go_type:

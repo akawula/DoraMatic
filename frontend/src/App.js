@@ -297,13 +297,19 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeam, startDate, endDate, selectedMemberLogins, teamMembers]);
 
-  // useEffect for PR pagination (when prCurrentPage changes and is > 1)
+  // useEffect for PR pagination (when prCurrentPage changes)
   useEffect(() => {
-    if (selectedTeam && startDate && endDate && teamMembers.length > 0 && prCurrentPage > 1 && fetchAttempted) {
-      handleFetchStatsAndPRs(prCurrentPage, selectedMemberLogins, false);
+    // This effect handles pagination once an initial fetch has been attempted.
+    // It runs for any change in prCurrentPage.
+    if (selectedTeam && startDate && endDate && teamMembers.length > 0 && fetchAttempted) {
+      // Determine if stats should be fetched: only for page 1.
+      // Also, if navigating to page 1, PRs should be cleared before fetching.
+      const shouldFetchStats = prCurrentPage === 1;
+      handleFetchStatsAndPRs(prCurrentPage, selectedMemberLogins, shouldFetchStats);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prCurrentPage, fetchAttempted, selectedMemberLogins]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prCurrentPage, fetchAttempted]); // Dependencies: prCurrentPage and fetchAttempted gate.
+  // selectedMemberLogins, selectedTeam, etc., are available to handleFetchStatsAndPRs via its useCallback closure.
 
 
   const handleToggleMember = useCallback((login) => {

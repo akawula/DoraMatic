@@ -129,6 +129,25 @@ WITH FirstCommitPerPR AS (
         MIN(created_at) as first_commit_at
     FROM commits
     GROUP BY pr_id
+),
+FirstActualReviewPerPR AS (
+    SELECT
+        pull_request_id,
+        MIN(submitted_at) as first_actual_review_at
+    FROM pull_request_reviews
+    WHERE state = 'APPROVED' OR state = 'CHANGES_REQUESTED' -- Consider only substantive reviews
+    GROUP BY pull_request_id
+),
+TeamMemberReviewStats AS (
+    SELECT
+        COUNT(prr.id) AS total_team_reviews_submitted_val,
+        COUNT(DISTINCT prr.author_login) AS distinct_team_reviewers_count_val
+    FROM pull_request_reviews prr
+    INNER JOIN teams t_rev ON prr.author_login = t_rev.member
+    WHERE t_rev.team = sqlc.arg(team_name)
+      AND (sqlc.arg(members)::text[] IS NULL OR prr.author_login = ANY(sqlc.arg(members)::text[]))
+      AND prr.submitted_at >= sqlc.arg(start_date)::timestamptz
+      AND prr.submitted_at <= sqlc.arg(end_date)::timestamptz
 )
 SELECT
     COUNT(CASE WHEN p.state = 'MERGED' AND p.merged_at >= sqlc.arg(start_date)::timestamptz AND p.merged_at <= sqlc.arg(end_date)::timestamptz THEN 1 END)::int AS merged_count,
@@ -177,18 +196,101 @@ SELECT
             ELSE NULL
         END
     )::int AS count_prs_for_avg_lead_time_to_merge,
+    -- Calculate average time to first actual review in seconds
+    COALESCE(AVG(
+        CASE
+            -- Only include PRs that have a first commit and a first actual review, and review happened after commit
+            WHEN far.first_actual_review_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND far.first_actual_review_at > fc.first_commit_at
+            THEN EXTRACT(EPOCH FROM (far.first_actual_review_at - fc.first_commit_at))
+            ELSE NULL
+        END
+    ), 0)::float AS avg_time_to_first_actual_review_seconds,
+    -- Count PRs contributing to the average time to first actual review
+    COUNT(
+        CASE
+            WHEN far.first_actual_review_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND far.first_actual_review_at > fc.first_commit_at
+            THEN 1
+            ELSE NULL
+        END
+    )::int AS count_prs_for_avg_time_to_first_actual_review,
     COALESCE(SUM(CASE WHEN p.state = 'MERGED' AND p.merged_at >= sqlc.arg(start_date)::timestamptz AND p.merged_at <= sqlc.arg(end_date)::timestamptz THEN p.additions ELSE 0 END), 0)::bigint AS total_additions,
-    COALESCE(SUM(CASE WHEN p.state = 'MERGED' AND p.merged_at >= sqlc.arg(start_date)::timestamptz AND p.merged_at <= sqlc.arg(end_date)::timestamptz THEN p.deletions ELSE 0 END), 0)::bigint AS total_deletions
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' AND p.merged_at >= sqlc.arg(start_date)::timestamptz AND p.merged_at <= sqlc.arg(end_date)::timestamptz THEN p.deletions ELSE 0 END), 0)::bigint AS total_deletions,
+    COALESCE(MAX(tmrs.total_team_reviews_submitted_val), 0)::bigint AS total_team_reviews_submitted,
+    COALESCE(MAX(tmrs.distinct_team_reviewers_count_val), 0)::int AS distinct_team_reviewers_count
 FROM prs p
 JOIN teams t ON p.author = t.member
 LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id
--- LEFT JOIN FirstReviewPerPR fr ON p.id = fr.pull_request_id -- Join with first review data -- No longer needed
+LEFT JOIN FirstActualReviewPerPR far ON p.id = far.pull_request_id -- Join with first actual review data
+CROSS JOIN TeamMemberReviewStats tmrs
 WHERE t.team = sqlc.arg(team_name)
   AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[])) -- Filter by selected members
   AND (
        (p.state = 'MERGED' AND p.merged_at >= sqlc.arg(start_date)::timestamptz AND p.merged_at <= sqlc.arg(end_date)::timestamptz) OR
        (p.state = 'CLOSED' AND p.created_at >= sqlc.arg(start_date)::timestamptz AND p.created_at <= sqlc.arg(end_date)::timestamptz)
       );
+
+-- name: GetTeamMemberReviewStatsByDateRange :many
+SELECT
+    prr.author_login,
+    COUNT(prr.id) AS total_reviews_submitted,
+    SUM(CASE WHEN prr.state = 'APPROVED' THEN 1 ELSE 0 END) AS approved_reviews,
+    SUM(CASE WHEN prr.state = 'CHANGES_REQUESTED' THEN 1 ELSE 0 END) AS changes_requested_reviews,
+    SUM(CASE WHEN prr.state = 'COMMENTED' THEN 1 ELSE 0 END) AS commented_reviews
+FROM
+    pull_request_reviews prr
+INNER JOIN teams t ON prr.author_login = t.member -- Ensure reviewer is in the specified team
+WHERE t.team = sqlc.arg(team_name)
+  AND (sqlc.arg(members)::text[] IS NULL OR prr.author_login = ANY(sqlc.arg(members)::text[])) -- Further filter by selected members if provided
+  AND prr.submitted_at >= sqlc.arg(start_date)::timestamptz
+  AND prr.submitted_at <= sqlc.arg(end_date)::timestamptz
+GROUP BY
+    prr.author_login
+ORDER BY
+    total_reviews_submitted DESC;
+
+-- name: GetPullRequestTimeDataForStats :many
+WITH FirstCommitPerPR AS (
+    SELECT
+        pr_id,
+        MIN(created_at) as first_commit_at
+    FROM commits
+    GROUP BY pr_id
+),
+FirstActualReviewPerPR AS (
+    SELECT
+        pull_request_id,
+        MIN(submitted_at) as first_actual_review_at
+    FROM pull_request_reviews
+    WHERE state = 'APPROVED' OR state = 'CHANGES_REQUESTED'
+    GROUP BY pull_request_id
+)
+SELECT
+    p.id AS pr_id,
+    p.created_at AS pr_created_at,
+    p.state AS pr_state,
+    p.merged_at AS pr_merged_at,
+    p.review_requested_at AS pr_review_requested_at,
+    p.reviews_requested AS pr_reviews_requested, -- Added for avg reviews requested count
+    fc.first_commit_at,
+    far.first_actual_review_at
+FROM prs p
+LEFT JOIN teams t ON p.author = t.member -- Join with teams to filter by team_name
+LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id
+LEFT JOIN FirstActualReviewPerPR far ON p.id = far.pull_request_id
+WHERE
+    t.team = sqlc.arg(team_name)
+    AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[]))
+    AND (
+        -- Include PRs relevant for any lead time calculation or stats within the period
+        -- Merged PRs within the period
+        (p.state = 'MERGED' AND p.merged_at >= sqlc.arg(start_date)::timestamptz AND p.merged_at <= sqlc.arg(end_date)::timestamptz) OR
+        -- PRs created within the period (relevant for 'time to code', 'time to first review' even if not merged in period)
+        (p.created_at >= sqlc.arg(start_date)::timestamptz AND p.created_at <= sqlc.arg(end_date)::timestamptz) OR
+        -- PRs that had review requested within the period
+        (p.review_requested_at >= sqlc.arg(start_date)::timestamptz AND p.review_requested_at <= sqlc.arg(end_date)::timestamptz)
+        -- Note: This might fetch more PRs than strictly needed for *averages* if averages are only for merged PRs.
+        -- The Go code will need to filter appropriately for each specific metric.
+    );
 
 
 -- List Pull Requests (Paginated & Searchable by Title/Author and optionally Team) --
@@ -201,63 +303,58 @@ WITH FirstCommitPerPR AS (
     FROM commits
     GROUP BY pr_id
 ),
-PRsWithLeadTimes AS (
+FirstActualReviewPerPR AS ( -- Added for consistency, though not directly used for display yet
     SELECT
-        p.id,
-        p.repository_name,
-        p.title,
-        p.author,
-        p.state,
-        p.created_at,
-        p.merged_at,
-        p.additions,
-        p.deletions,
-        p.url,
-        p.review_requested_at, -- Needed for calculation
-        fc.first_commit_at,    -- From CTE
-        CASE
-            WHEN p.review_requested_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND p.review_requested_at > fc.first_commit_at
-            THEN (EXTRACT(EPOCH FROM p.review_requested_at) - EXTRACT(EPOCH FROM fc.first_commit_at))
-            ELSE 0.0 -- Changed from NULL
-        END::DOUBLE PRECISION AS lead_time_to_code_seconds,
-        CASE
-            WHEN p.merged_at IS NOT NULL AND p.review_requested_at IS NOT NULL AND p.review_requested_at < p.merged_at
-            THEN (EXTRACT(EPOCH FROM p.merged_at) - EXTRACT(EPOCH FROM p.review_requested_at))
-            ELSE 0.0 -- Changed from NULL
-        END::DOUBLE PRECISION AS lead_time_to_review_seconds,
-        CASE
-            WHEN p.merged_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND fc.first_commit_at < p.merged_at
-            THEN EXTRACT(EPOCH FROM (p.merged_at - fc.first_commit_at))
-            ELSE 0.0 -- Changed from NULL
-        END::DOUBLE PRECISION AS lead_time_to_merge_seconds
-    FROM prs p
-    LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id
-    -- LEFT JOIN FirstReviewPerPR fr ON p.id = fr.pull_request_id -- No longer needed
+        pull_request_id,
+        MIN(submitted_at) as first_actual_review_at
+    FROM pull_request_reviews
+    WHERE state = 'APPROVED' OR state = 'CHANGES_REQUESTED'
+    GROUP BY pull_request_id
 )
 SELECT
-    pr_lt.id,
-    pr_lt.repository_name,
-    pr_lt.title,
-    pr_lt.author,
-    pr_lt.state,
-    pr_lt.created_at,
-    pr_lt.merged_at,
-    pr_lt.additions,
-    pr_lt.deletions,
-    pr_lt.url,
-    pr_lt.lead_time_to_code_seconds,
-    pr_lt.lead_time_to_review_seconds,
-    pr_lt.lead_time_to_merge_seconds
-FROM PRsWithLeadTimes pr_lt
-LEFT JOIN teams t ON pr_lt.author = t.member -- Join with teams table for filtering
+    p.id,
+    p.repository_name,
+    p.title,
+    p.author,
+    p.state,
+    p.created_at AS pr_created_at, -- Renamed for clarity
+    p.merged_at AS pr_merged_at,   -- Renamed for clarity
+    p.additions,
+    p.deletions,
+    p.url,
+    p.review_requested_at AS pr_review_requested_at, -- Renamed for clarity
+    p.reviews_requested AS pr_reviews_requested_count, -- Added for PR list display
+    fc.first_commit_at,
+    far.first_actual_review_at, -- Added for potential future use or if Go calculates all lead times
+    CASE
+        WHEN p.review_requested_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND p.review_requested_at > fc.first_commit_at
+        THEN EXTRACT(EPOCH FROM (p.review_requested_at - fc.first_commit_at))
+        ELSE NULL
+    END AS lead_time_to_code_seconds,
+    CASE
+        WHEN p.state = 'MERGED' AND p.merged_at IS NOT NULL AND p.review_requested_at IS NOT NULL AND p.review_requested_at < p.merged_at
+        THEN EXTRACT(EPOCH FROM (p.merged_at - p.review_requested_at))
+        ELSE NULL
+    END AS lead_time_to_review_seconds,
+    CASE
+        WHEN p.state = 'MERGED' AND p.merged_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND fc.first_commit_at < p.merged_at
+        THEN EXTRACT(EPOCH FROM (p.merged_at - fc.first_commit_at))
+        ELSE NULL
+    END AS lead_time_to_merge_seconds
+FROM prs p
+LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id
+LEFT JOIN FirstActualReviewPerPR far ON p.id = far.pull_request_id -- Joined
+LEFT JOIN teams t ON p.author = t.member -- Join with teams table for filtering
 WHERE
-    pr_lt.state = 'MERGED' -- Only show merged PRs when filtering by merged_at
-    AND pr_lt.merged_at >= sqlc.arg(start_date)::timestamptz
-    AND pr_lt.merged_at <= sqlc.arg(end_date)::timestamptz
+    -- Date filtering should apply to the primary event defining the list, e.g., merged_at or created_at
+    -- For this example, let's assume filtering by merged_at for a list of merged PRs.
+    -- Adjust as needed if the list criteria change (e.g., all open PRs, PRs created in range).
+    p.merged_at >= sqlc.arg(start_date)::timestamptz
+    AND p.merged_at <= sqlc.arg(end_date)::timestamptz
     AND ( -- Filter by search term (title or author)
         sqlc.arg(search_term)::text = '' OR
-        pr_lt.title ILIKE '%' || sqlc.arg(search_term)::text || '%' OR
-        pr_lt.author ILIKE '%' || sqlc.arg(search_term)::text || '%'
+        p.title ILIKE '%' || sqlc.arg(search_term)::text || '%' OR
+        p.author ILIKE '%' || sqlc.arg(search_term)::text || '%'
     )
     AND ( -- Optionally filter by team name
         sqlc.arg(team_name)::text = '' OR
@@ -265,14 +362,14 @@ WHERE
     )
     AND ( -- Optionally filter by state
         sqlc.arg(filter_state)::text = '' OR
-        pr_lt.state ILIKE '%' || sqlc.arg(filter_state)::text || '%' -- Use ILIKE for state as well for consistency, though direct equals is fine if state is exact
+        p.state ILIKE '%' || sqlc.arg(filter_state)::text || '%'
     )
     AND ( -- Optionally filter by author (case-insensitive)
         sqlc.arg(filter_author)::text = '' OR
-        pr_lt.author ILIKE '%' || sqlc.arg(filter_author)::text || '%'
+        p.author ILIKE '%' || sqlc.arg(filter_author)::text || '%'
     )
-    AND (sqlc.arg(members)::text[] IS NULL OR pr_lt.author = ANY(sqlc.arg(members)::text[])) -- Filter by selected members
-ORDER BY pr_lt.merged_at DESC -- Default sort by merged_at
+    AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[])) -- Filter by selected members
+ORDER BY p.merged_at DESC -- Default sort by merged_at
 LIMIT sqlc.arg(page_size)::int
 OFFSET sqlc.arg(offset_val)::int;
 
@@ -281,8 +378,7 @@ SELECT COUNT(p.*)::int -- Count distinct PRs
 FROM prs p
 LEFT JOIN teams t ON p.author = t.member -- Join with teams table
 WHERE
-    p.state = 'MERGED' -- Only count merged PRs when filtering by merged_at
-    AND p.merged_at >= sqlc.arg(start_date)::timestamptz
+    p.merged_at >= sqlc.arg(start_date)::timestamptz -- Ensure this matches ListPullRequests criteria
     AND p.merged_at <= sqlc.arg(end_date)::timestamptz
     AND ( -- Filter by search term (title or author)
         sqlc.arg(search_term)::text = '' OR

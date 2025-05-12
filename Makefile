@@ -16,6 +16,12 @@ run-cron: clean build-cron
 run-server: clean build-server
 	DEBUG=1 ./app/server
 
+run-frontend:
+	cd frontend && npm start
+
+dev:
+	make run-server & make run-frontend
+
 clean:
 	rm -rf ./app
 
