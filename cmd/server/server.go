@@ -90,8 +90,17 @@ func main() {
 	port := "10000"                              // Default port, can be overridden by env var later if needed
 	logger.Info("Server starting", "port", port) // Use structured logging
 
+	// Configure the server with timeouts
+	server := &http.Server{
+		Addr:         ":" + port,
+		Handler:      nil, // Use http.DefaultServeMux
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
 	// Fix assignment: use '=' instead of ':=' as err is already declared
-	err = http.ListenAndServe(":"+port, nil)
+	err = server.ListenAndServe()
 	if err != nil {
 		logger.Error("Server failed to start", "error", err)
 		os.Exit(1)

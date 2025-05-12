@@ -29,6 +29,23 @@ clean:
 test:
 	go test ./... -coverprofile=coverage.out && go tool cover -func=coverage.out
 
+# Gosec - Security scanner for Go code
+# Assumes gosec is installed, potentially via: go install github.com/securego/gosec/v2/cmd/gosec@latest
+# and available in $HOME/go/bin
+gosec:
+	@echo "Running Gosec security scanner..."
+	$(HOME)/go/bin/gosec -fmt=json -out=gosec-results.json ./...
+	@echo "Gosec scan complete. Results in gosec-results.json"
+
+# ESLint - Runs ESLint for JavaScript/TypeScript files in the frontend directory
+lint-js:
+	@echo "Running ESLint for frontend..."
+	cd frontend && npx eslint src --format json --output-file eslint-results.json
+	@echo "ESLint check complete."
+
+# Run all linters
+lint: gosec lint-js
+
 # SQLC - Requires sqlc CLI: https://github.com/sqlc-dev/sqlc
 # Assumes sqlc is installed, potentially via: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 # and available in $HOME/go/bin
