@@ -103,14 +103,35 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 		offset := calculateOffset(page, pageSize)
 
 		// --- Database Interaction ---
+		const maxInt32 = 2147483647
+		const minInt32 = -2147483648
+
+		// Ensure pageSize is within int32 range
+		safePageSize := pageSize
+		if safePageSize > maxInt32 {
+			logger.Warn("pageSize exceeds int32 range, clamping to max int32",
+				"original", pageSize,
+				"clamped", maxInt32)
+			safePageSize = maxInt32
+		}
+
+		// Ensure offset is within int32 range
+		safeOffset := offset
+		if safeOffset > maxInt32 {
+			logger.Warn("offset exceeds int32 range, clamping to max int32",
+				"original", offset,
+				"clamped", maxInt32)
+			safeOffset = maxInt32
+		}
+
 		listParams := sqlc.ListPullRequestsParams{
 			StartDate:  startDate,
 			EndDate:    endDate,
 			SearchTerm: search,
 			TeamName:   teamName,
-			Members:    selectedMembers, // Add members to params
-			PageSize:   int32(pageSize),
-			OffsetVal:  int32(offset),
+			Members:    selectedMembers,     // Add members to params
+			PageSize:   int32(safePageSize), // #nosec G115 - safe conversion, already checked bounds above
+			OffsetVal:  int32(safeOffset),   // #nosec G115 - safe conversion, already checked bounds above
 		}
 
 		countParams := sqlc.CountPullRequestsParams{
@@ -167,7 +188,6 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 				val := dbPR.PrReviewsRequestedCount.Int32
 				apiPR.PrReviewsRequestedCount = &val
 			}
-
 
 			if dbPR.LeadTimeToCodeSeconds != nil {
 				if pgNum, ok := dbPR.LeadTimeToCodeSeconds.(pgtype.Numeric); ok {

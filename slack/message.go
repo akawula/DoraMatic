@@ -9,8 +9,9 @@ import (
 	"os"
 	"slices"
 
-	"github.com/akawula/DoraMatic/store"
 	"time" // Add time import for formatting
+
+	"github.com/akawula/DoraMatic/store"
 )
 
 // slackAPIURL is the endpoint for posting messages. Can be overridden for tests.
@@ -71,10 +72,13 @@ func SendMessage(prs []store.SecurityPR) {
 	}
 
 	for c := range slices.Chunk(initialBlock, 50) {
-		sendMesasge(c, "UE9M08BLP")
+		if err := sendMesasge(c, "UE9M08BLP"); err != nil {
+			fmt.Printf("Error sending message chunk: %v\n", err)
+			// Continue with next chunk even if there's an error
+		}
 	}
 
-	sendMesasge([]map[string]interface{}{
+	if err := sendMesasge([]map[string]interface{}{
 		{
 			"type": "section",
 			"text": map[string]interface{}{
@@ -83,7 +87,9 @@ func SendMessage(prs []store.SecurityPR) {
 				"text":  "Doramatic success!",
 			},
 		},
-	}, "UJ36ACNUD")
+	}, "UJ36ACNUD"); err != nil {
+		fmt.Printf("Error sending success message: %v\n", err)
+	}
 }
 
 func sendMesasge(blocks []map[string]interface{}, channel string) error {
@@ -125,12 +131,20 @@ func sendMesasge(blocks []map[string]interface{}, channel string) error {
 
 	// Check response
 	if resp.StatusCode != http.StatusOK {
-		return errors.New(fmt.Sprintf("Slack API returned non-200 status code: %d\n", resp.StatusCode))
+		return fmt.Errorf("Slack API returned non-200 status code: %d", resp.StatusCode)
 	}
 
-	// Parse and print response
+	// Parse response
 	var response map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&response)
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return fmt.Errorf("failed to decode Slack API response: %w", err)
+	}
+
+	// Check if Slack reported an error in their response
+	if ok, _ := response["ok"].(bool); !ok {
+		errMsg, _ := response["error"].(string)
+		return fmt.Errorf("Slack API reported error: %s", errMsg)
+	}
 
 	return nil
 }

@@ -69,8 +69,24 @@ func (p *Postgres) Close() {
 // GetRepos retrieves repositories using generated sqlc code.
 // NOTE: Return type uses the generated sqlc.Repository struct.
 func (p *Postgres) GetRepos(ctx context.Context, page int, search string) ([]sqlc.Repository, int, error) {
-	limit := int32(20)                                 // sqlc uses specific int types
-	offset := int32(calculateOffset(page, int(limit))) // Assumes calculateOffset is accessible
+	const maxInt32 = 2147483647
+	const minInt32 = -2147483648
+
+	// Use a safe constant value for limit
+	limit := int32(20)
+
+	// Calculate offset safely to prevent integer overflow
+	calculatedOffset := calculateOffset(page, 20)
+
+	// Check if the offset is within int32 range
+	if calculatedOffset > maxInt32 || calculatedOffset < minInt32 {
+		p.Logger.Warn("offset value exceeds int32 range, clamping to max int32",
+			"calculated", calculatedOffset,
+			"clamped", maxInt32)
+		calculatedOffset = maxInt32
+	}
+
+	offset := int32(calculatedOffset) // #nosec G115 - safe conversion, already checked bounds above
 
 	p.Logger.Debug("Fetching repositories", "search", search, "limit", limit, "offset", offset)
 
