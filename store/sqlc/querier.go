@@ -13,6 +13,7 @@ import (
 
 type Querier interface {
 	CountPullRequests(ctx context.Context, arg CountPullRequestsParams) (int32, error)
+	CountPullRequestsWithJiraReferences(ctx context.Context, arg CountPullRequestsWithJiraReferencesParams) (int64, error)
 	// Repositories --
 	CountRepositories(ctx context.Context, dollar_1 string) (int64, error)
 	// Team Statistics --
@@ -43,6 +44,9 @@ type Querier interface {
 	InsertCommit(ctx context.Context, arg InsertCommitParams) error
 	// List Pull Requests (Paginated & Searchable by Title/Author and optionally Team) --
 	ListPullRequests(ctx context.Context, arg ListPullRequestsParams) ([]ListPullRequestsRow, error)
+	// Pull Request JIRA References --
+	ListPullRequestsWithJiraReferences(ctx context.Context, arg ListPullRequestsWithJiraReferencesParams) ([]ListPullRequestsWithJiraReferencesRow, error)
+	ListPullRequestsWithoutJiraReferences(ctx context.Context, arg ListPullRequestsWithoutJiraReferencesParams) ([]ListPullRequestsWithoutJiraReferencesRow, error)
 	// Use ILIKE for case-insensitive search, handle empty search string
 	ListRepositories(ctx context.Context, arg ListRepositoriesParams) ([]Repository, error)
 	SearchDistinctTeamNamesByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]string, error)

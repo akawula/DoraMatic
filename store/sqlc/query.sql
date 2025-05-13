@@ -326,6 +326,10 @@ SELECT
     p.reviews_requested AS pr_reviews_requested_count, -- Added for PR list display
     fc.first_commit_at,
     far.first_actual_review_at, -- Added for potential future use or if Go calculates all lead times
+    REGEXP_MATCHES(
+        COALESCE(p.title, '') || ' ' || COALESCE(p.branch_name, ''),
+        '([A-Z]+-[0-9]+)'
+    ) AS jira_references, -- Derived JIRA references
     CASE
         WHEN p.review_requested_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND p.review_requested_at > fc.first_commit_at
         THEN EXTRACT(EPOCH FROM (p.review_requested_at - fc.first_commit_at))
@@ -428,3 +432,76 @@ LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id
 WHERE p.state = 'MERGED'
 ORDER BY p.merged_at DESC
 LIMIT 10;
+
+-- Pull Request JIRA References --
+
+-- name: ListPullRequestsWithJiraReferences :many
+SELECT
+    p.id,
+    p.title,
+    p.branch_name,
+    p.url,
+    p.author,
+    p.state,
+    p.created_at,
+    p.merged_at,
+    p.repository_name,
+    p.repository_owner,
+    REGEXP_MATCHES(
+        COALESCE(p.title, '') || ' ' || COALESCE(p.branch_name, ''),
+        '([A-Z]+-[0-9]+)'
+    ) AS jira_references
+FROM prs p
+LEFT JOIN teams t ON p.author = t.member -- Join with teams table
+WHERE
+    (COALESCE(p.title, '') ~ '[A-Z]+-[0-9]+' OR COALESCE(p.branch_name, '') ~ '[A-Z]+-[0-9]+') -- Condition for having Jira refs
+    AND p.created_at >= sqlc.arg(start_date)::timestamptz
+    AND p.created_at <= sqlc.arg(end_date)::timestamptz
+    AND (sqlc.arg(text_search_term)::text = '' OR
+         p.title ILIKE '%' || sqlc.arg(text_search_term)::text || '%' OR
+         p.branch_name ILIKE '%' || sqlc.arg(text_search_term)::text || '%' OR
+         p.author ILIKE '%' || sqlc.arg(text_search_term)::text || '%')
+    AND (sqlc.arg(team_name)::text = '' OR t.team = sqlc.arg(team_name)::text)
+    AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[]))
+ORDER BY p.created_at DESC
+LIMIT sqlc.arg(page_size)::int OFFSET sqlc.arg(offset_val)::int;
+
+-- name: CountPullRequestsWithJiraReferences :one
+SELECT COUNT(DISTINCT p.id) -- Ensure distinct PRs are counted
+FROM prs p
+LEFT JOIN teams t ON p.author = t.member -- Join with teams table
+WHERE
+    (COALESCE(p.title, '') ~ '[A-Z]+-[0-9]+' OR COALESCE(p.branch_name, '') ~ '[A-Z]+-[0-9]+')
+    AND p.created_at >= sqlc.arg(start_date)::timestamptz
+    AND p.created_at <= sqlc.arg(end_date)::timestamptz
+    AND (sqlc.arg(text_search_term)::text = '' OR
+         p.title ILIKE '%' || sqlc.arg(text_search_term)::text || '%' OR
+         p.branch_name ILIKE '%' || sqlc.arg(text_search_term)::text || '%' OR
+         p.author ILIKE '%' || sqlc.arg(text_search_term)::text || '%')
+    AND (sqlc.arg(team_name)::text = '' OR t.team = sqlc.arg(team_name)::text)
+    AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[]));
+
+-- name: ListPullRequestsWithoutJiraReferences :many
+SELECT
+    p.id,
+    p.title,
+    p.branch_name,
+    p.url,
+    p.author,
+    p.state,
+    p.created_at,
+    p.merged_at,
+    p.repository_name,
+    p.repository_owner
+FROM prs p
+LEFT JOIN teams t ON p.author = t.member -- Join with teams table
+WHERE
+    (COALESCE(p.title, '') !~ '[A-Z]+-[0-9]+' AND COALESCE(p.branch_name, '') !~ '[A-Z]+-[0-9]+') -- Condition for NOT having Jira refs
+    AND p.created_at >= sqlc.arg(start_date)::timestamptz
+    AND p.created_at <= sqlc.arg(end_date)::timestamptz
+    AND (sqlc.arg(text_search_term)::text = '' OR
+         p.title ILIKE '%' || sqlc.arg(text_search_term)::text || '%' OR
+         p.branch_name ILIKE '%' || sqlc.arg(text_search_term)::text || '%' OR
+         p.author ILIKE '%' || sqlc.arg(text_search_term)::text || '%')
+    AND (sqlc.arg(team_name)::text = '' OR t.team = sqlc.arg(team_name)::text)
+    AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[]));

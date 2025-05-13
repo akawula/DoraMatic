@@ -6,7 +6,6 @@ import Typography from "@mui/joy/Typography";
 import CircularProgress from "@mui/joy/CircularProgress";
 import Box from "@mui/joy/Box";
 import Chip from "@mui/joy/Chip";
-// import { formatDistanceToNow } from "date-fns"; // formatDate was unused
 
 // Helper function to format lead time in seconds to a readable string
 const formatLeadTime = (seconds) => {
@@ -53,8 +52,6 @@ function PullRequestList({
   loading,
   error,
   selectedTeam,
-  // startDate, // Not directly used for rendering logic here, but part of criteria
-  // endDate,   // Not directly used for rendering logic here
   fetchAttempted,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -71,7 +68,8 @@ function PullRequestList({
           pr.author?.toLowerCase().includes(lowerSearchTerm) ||
           pr.repo_name?.toLowerCase().includes(lowerSearchTerm) ||
           pr.state?.toLowerCase().includes(lowerSearchTerm) ||
-          String(pr.id).includes(lowerSearchTerm)
+          String(pr.id).includes(lowerSearchTerm) ||
+          (pr.jira_references && pr.jira_references.some(ref => ref.toLowerCase().includes(lowerSearchTerm)))
       );
     }
     return filtered;
@@ -104,6 +102,13 @@ function PullRequestList({
           }
           return sortConfig.direction === "ascending" ? valA - valB : valB - valA;
         }
+        if (sortConfig.key === "jira_references") {
+          const refsA = (a.jira_references || []).join(", ").toLowerCase();
+          const refsB = (b.jira_references || []).join(", ").toLowerCase();
+          if (refsA < refsB) return sortConfig.direction === "ascending" ? -1 : 1;
+          if (refsA > refsB) return sortConfig.direction === "ascending" ? 1 : -1;
+          return 0;
+        }
         if (sortConfig.key === "state") {
           const stateA = aValue?.String?.toLowerCase() || "";
           const stateB = bValue?.String?.toLowerCase() || "";
@@ -116,8 +121,14 @@ function PullRequestList({
           const sizeB = (b.additions || 0) + (b.deletions || 0);
           return sortConfig.direction === "ascending" ? sizeA - sizeB : sizeB - sizeA;
         }
+        // Default sort for other string types or numbers
         const valA = typeof aValue === "string" ? aValue.toLowerCase() : aValue;
         const valB = typeof bValue === "string" ? bValue.toLowerCase() : bValue;
+
+        if (valA === null || valA === undefined) return sortConfig.direction === "ascending" ? 1 : -1; // push nulls/undefined to end
+        if (valB === null || valB === undefined) return sortConfig.direction === "ascending" ? -1 : 1; // push nulls/undefined to end
+
+
         if (valA < valB) return sortConfig.direction === "ascending" ? -1 : 1;
         if (valA > valB) return sortConfig.direction === "ascending" ? 1 : -1;
         return 0;
@@ -207,48 +218,64 @@ function PullRequestList({
             stickyHeader
             hoverRow
             sx={{
-              "& thead th": { fontWeight: "lg", cursor: "pointer" },
-              "& tbody td": { verticalAlign: "top" },
-              "--TableCell-paddingX": "0.75rem",
-              "--TableCell-paddingY": "0.5rem",
-            }}
-          >
-            <thead>
-              <tr>
-                <th onClick={() => requestSort("title")} style={{ width: "23%" }}>Title{getSortIndicator("title")}</th>
-                <th onClick={() => requestSort("author")} style={{ width: "10%" }}>Author{getSortIndicator("author")}</th>
-                <th onClick={() => requestSort("repo_name")} style={{ width: "14%" }}>Repository{getSortIndicator("repo_name")}</th>
-                <th onClick={() => requestSort("pr_reviews_requested_count")} style={{ width: "8%" }}>Reviews Req.{getSortIndicator("pr_reviews_requested_count")}</th>
-                <th onClick={() => requestSort("lead_time_to_code_seconds")} style={{ width: "10%" }}>LT Code{getSortIndicator("lead_time_to_code_seconds")}</th>
-                <th onClick={() => requestSort("lead_time_to_review_seconds")} style={{ width: "10%" }}>LT Review{getSortIndicator("lead_time_to_review_seconds")}</th>
-                <th onClick={() => requestSort("lead_time_to_merge_seconds")} style={{ width: "10%" }}>LT Merge{getSortIndicator("lead_time_to_merge_seconds")}</th>
-                <th onClick={() => requestSort("state")} style={{ width: "8%" }}>State{getSortIndicator("state")}</th>
-                <th onClick={() => requestSort("size")} style={{ width: "7%" }}>Size{getSortIndicator("size")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedPullRequests.map((pr) => (
-                <tr key={pr.id}>
-                  <td>
-                    <Link href={pr.url || "#"} target="_blank" rel="noopener noreferrer" level="title-sm">
-                      {pr.title || "No Title"}
-                    </Link>
-                  </td>
-                  <td>{pr.author || "Unknown"}</td>
-                  <td>{pr.repo_name || "N/A"}</td>
-                  <td>{pr.pr_reviews_requested_count === null || pr.pr_reviews_requested_count === undefined ? "-" : pr.pr_reviews_requested_count}</td>
-                  <td>{formatLeadTime(pr.lead_time_to_code_seconds)}</td>
-                  <td>{formatLeadTime(pr.lead_time_to_review_seconds)}</td>
-                  <td>{formatLeadTime(pr.lead_time_to_merge_seconds)}</td>
-                  <td>
-                    <Chip size="sm" variant="soft" color={getStateColor(pr.state)}>
-                      {pr.state || "Unknown"}
-                    </Chip>
-                  </td>
-                  <td>{getPrSizeLabel(pr.additions, pr.deletions)}</td>
-                </tr>
-              ))}
-            </tbody>
+          "& thead th": { fontWeight: "lg", cursor: "pointer" },
+          "& tbody td": { verticalAlign: "top" },
+          "--TableCell-paddingX": "0.75rem",
+          "--TableCell-paddingY": "0.5rem",
+        }}
+      >
+        <thead>
+          <tr>
+            <th onClick={() => requestSort("title")} style={{ width: "20%" }}>Title{getSortIndicator("title")}</th>
+            <th onClick={() => requestSort("author")} style={{ width: "10%" }}>Author{getSortIndicator("author")}</th>
+            <th onClick={() => requestSort("repo_name")} style={{ width: "12%" }}>Repository{getSortIndicator("repo_name")}</th>
+            <th onClick={() => requestSort("jira_references")} style={{ width: "10%" }}>Jira Keys{getSortIndicator("jira_references")}</th>
+            <th onClick={() => requestSort("pr_reviews_requested_count")} style={{ width: "8%" }}>Reviews Req.{getSortIndicator("pr_reviews_requested_count")}</th>
+            <th onClick={() => requestSort("lead_time_to_code_seconds")} style={{ width: "9%" }}>LT Code{getSortIndicator("lead_time_to_code_seconds")}</th>
+            <th onClick={() => requestSort("lead_time_to_review_seconds")} style={{ width: "9%" }}>LT Review{getSortIndicator("lead_time_to_review_seconds")}</th>
+            <th onClick={() => requestSort("lead_time_to_merge_seconds")} style={{ width: "9%" }}>LT Merge{getSortIndicator("lead_time_to_merge_seconds")}</th>
+            <th onClick={() => requestSort("state")} style={{ width: "7%" }}>State{getSortIndicator("state")}</th>
+            <th onClick={() => requestSort("size")} style={{ width: "6%" }}>Size{getSortIndicator("size")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedPullRequests.map((pr) => (
+            <tr key={pr.id}>
+              <td>
+                <Link href={pr.url || "#"} target="_blank" rel="noopener noreferrer" level="title-sm">
+                  {pr.title || "No Title"}
+                </Link>
+              </td>
+              <td>{pr.author || "Unknown"}</td>
+              <td>{pr.repo_name || "N/A"}</td>
+              <td>
+                {pr.jira_references && pr.jira_references.length > 0
+                  ? pr.jira_references.map((ref, index) => {
+                      const jiraKey = ref.substring(ref.lastIndexOf("/") + 1);
+                      return (
+                        <React.Fragment key={ref}>
+                          <Link href={ref} target="_blank" rel="noopener noreferrer">
+                            {jiraKey}
+                          </Link>
+                          {index < pr.jira_references.length - 1 ? ", " : ""}
+                        </React.Fragment>
+                      );
+                    })
+                  : "N/A"}
+              </td>
+              <td>{pr.pr_reviews_requested_count === null || pr.pr_reviews_requested_count === undefined ? "-" : pr.pr_reviews_requested_count}</td>
+              <td>{formatLeadTime(pr.lead_time_to_code_seconds)}</td>
+              <td>{formatLeadTime(pr.lead_time_to_review_seconds)}</td>
+              <td>{formatLeadTime(pr.lead_time_to_merge_seconds)}</td>
+              <td>
+                <Chip size="sm" variant="soft" color={getStateColor(pr.state)}>
+                  {pr.state || "Unknown"}
+                </Chip>
+              </td>
+              <td>{getPrSizeLabel(pr.additions, pr.deletions)}</td>
+            </tr>
+          ))}
+        </tbody>
           </Table>
         </Box>
       )}

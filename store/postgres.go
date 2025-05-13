@@ -566,3 +566,43 @@ func (p *Postgres) CountPullRequests(ctx context.Context, arg sqlc.CountPullRequ
 	}
 	return count, nil
 }
+
+// CountPullRequestsWithJiraReferences implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) CountPullRequestsWithJiraReferences(ctx context.Context, arg sqlc.CountPullRequestsWithJiraReferencesParams) (int64, error) {
+	count, err := p.queries.CountPullRequestsWithJiraReferences(ctx, arg)
+	if err != nil {
+		p.Logger.Error("Failed to count PRs with JIRA references", "params", arg, "error", err)
+		return 0, err
+	}
+	return count, nil
+}
+
+// CountPullRequestsWithoutJiraReferences implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) CountPullRequestsWithoutJiraReferences(ctx context.Context, arg sqlc.CountPullRequestsWithoutJiraReferencesParams) (int64, error) {
+	count, err := p.queries.CountPullRequestsWithoutJiraReferences(ctx, arg)
+	if err != nil {
+		p.Logger.Error("Failed to count PRs without JIRA references", "params", arg, "error", err)
+		return 0, err
+	}
+	return count, nil
+}
+
+// ListPullRequestsWithJiraReferences implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) ListPullRequestsWithJiraReferences(ctx context.Context, arg sqlc.ListPullRequestsWithJiraReferencesParams) ([]sqlc.ListPullRequestsWithJiraReferencesRow, error) {
+	prs, err := p.queries.ListPullRequestsWithJiraReferences(ctx, arg)
+	if err != nil {
+		p.Logger.Error("Failed to list PRs with JIRA references", "params", arg, "error", err)
+		return nil, err
+	}
+	return prs, nil
+}
+
+// ListPullRequestsWithoutJiraReferencesWithPagination implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) ListPullRequestsWithoutJiraReferencesWithPagination(ctx context.Context, arg sqlc.ListPullRequestsWithoutJiraReferencesParamsWithPagination) ([]sqlc.ListPullRequestsWithoutJiraReferencesRow, error) {
+	prs, err := p.queries.ListPullRequestsWithoutJiraReferencesWithPagination(ctx, arg)
+	if err != nil {
+		p.Logger.Error("Failed to list PRs without JIRA references", "params", arg, "error", err)
+		return nil, err
+	}
+	return prs, nil
+}

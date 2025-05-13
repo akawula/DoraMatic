@@ -246,14 +246,14 @@ function App() {
 
       promises.push(
         axios
-          .get(`/prs`, {
+          .get(`/prs`, { // Reverted endpoint to /prs for general PR listing
             params: {
               start_date: rfcStartDate,
               end_date: rfcEndDate,
-              team: selectedTeam,
+              team: selectedTeam, // Pass selectedTeam as 'team'
+              members: membersQueryParam, // Pass selected member logins as 'members'
               page: page,
               page_size: prPageSize,
-              members: membersQueryParam,
             },
           })
           .then((response) => {
@@ -349,7 +349,6 @@ function App() {
       <ModeToggle />
       <Sheet sx={{ p: 4, mt: 4 }}>
         {" "}
-        {/* Main container */}
         <Typography level="h3" component="h1" gutterBottom>
           Team Performance Metrics
         </Typography>

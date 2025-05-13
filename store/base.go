@@ -24,8 +24,8 @@ type SecurityPR struct {
 	Additions       int
 	Deletions       int
 	State           string
-	CreatedAt       string         `db:"created_at"` // Keep as string
-	MergedAt        pgtype.Timestamptz `db:"merged_at"` // Changed to pgtype.Timestamptz as used in postgres.go
+	CreatedAt       string             `db:"created_at"` // Keep as string
+	MergedAt        pgtype.Timestamptz `db:"merged_at"`  // Changed to pgtype.Timestamptz as used in postgres.go
 }
 
 type Store interface {
@@ -61,6 +61,12 @@ type Store interface {
 
 	// New method for fetching team member review stats
 	GetTeamMemberReviewStatsByDateRange(ctx context.Context, arg sqlc.GetTeamMemberReviewStatsByDateRangeParams) ([]sqlc.GetTeamMemberReviewStatsByDateRangeRow, error)
+
+	// Jira reference methods
+	CountPullRequestsWithJiraReferences(ctx context.Context, arg sqlc.CountPullRequestsWithJiraReferencesParams) (int64, error)
+	CountPullRequestsWithoutJiraReferences(ctx context.Context, arg sqlc.CountPullRequestsWithoutJiraReferencesParams) (int64, error)
+	ListPullRequestsWithJiraReferences(ctx context.Context, arg sqlc.ListPullRequestsWithJiraReferencesParams) ([]sqlc.ListPullRequestsWithJiraReferencesRow, error)
+	ListPullRequestsWithoutJiraReferencesWithPagination(ctx context.Context, arg sqlc.ListPullRequestsWithoutJiraReferencesParamsWithPagination) ([]sqlc.ListPullRequestsWithoutJiraReferencesRow, error)
 	// Removed duplicate Close()
 }
 
@@ -73,8 +79,9 @@ type Store interface {
 // 		q = fmt.Sprintf(`FROM repositories WHERE slug LIKE '%%%s%%'`, search)
 // 	}
 
-// 	return s + q + " ORDER by slug, org", c + q
-// }
+//		return s + q + " ORDER by slug, org", c + q
+//	}
+//
 // Keep only one valid calculateOffset function
 func calculateOffset(page, limit int) (offset int) {
 	offset = (page - 1) * limit

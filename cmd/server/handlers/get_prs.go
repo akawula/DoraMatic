@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os" // Import os package
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,8 @@ type PullRequestAPI struct {
 	LeadTimeToReviewSeconds *int64     `json:"lead_time_to_review_seconds"` // Use pointer for nullable float64
 	LeadTimeToMergeSeconds  *int64     `json:"lead_time_to_merge_seconds"`  // Use pointer for nullable float64
 	PrReviewsRequestedCount *int32     `json:"pr_reviews_requested_count,omitempty"`
+	JiraReferences          []string   `json:"jira_references,omitempty"`
+	HasJiraReference        bool       `json:"has_jira_reference"`
 }
 
 type PullRequestListResponseAPI struct {
@@ -38,16 +41,17 @@ type PullRequestListResponseAPI struct {
 	PageSize     int              `json:"page_size"`
 }
 
-func calculateOffset(page, limit int) int {
+func calculateOffset(page, pageSize int) int {
 	if page <= 0 {
 		page = 1
 	}
-	offset := (page - 1) * limit
+	offset := (page - 1) * pageSize
 	return offset
 }
 
 func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		jiraURL := os.Getenv("JIRA_URL") // Get JIRA_URL
 		ctx := r.Context()
 
 		// --- Parameter Parsing & Validation ---
@@ -150,8 +154,6 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 			return
 		}
 
-		// logger.Info("Fetched pull requests from DB", "prs", dbPRs)
-
 		logger.Debug("Counting pull requests", "params", countParams)
 		totalCount, err := db.CountPullRequests(ctx, countParams)
 		if err != nil {
@@ -188,6 +190,75 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 				val := dbPR.PrReviewsRequestedCount.Int32
 				apiPR.PrReviewsRequestedCount = &val
 			}
+
+			// Populate JIRA references
+			var jiraRefs []string
+			var hasJiraRef bool
+			// Assuming dbPR.JiraReferences is the new field from sqlc generate (likely interface{} or []byte for REGEXP_MATCHES)
+			if dbPR.JiraReferences != nil { // Check if the field exists and is not SQL NULL
+				if refs, ok := dbPR.JiraReferences.([]interface{}); ok {
+					for _, item := range refs {
+						if refStr, ok := item.(string); ok {
+							if jiraURL != "" {
+								jiraRefs = append(jiraRefs, jiraURL+"/browse/"+refStr)
+							} else {
+								jiraRefs = append(jiraRefs, refStr)
+							}
+						}
+					}
+				} else if ref, ok := dbPR.JiraReferences.(string); ok && ref != "" {
+					if jiraURL != "" {
+						jiraRefs = append(jiraRefs, jiraURL+"/browse/"+ref)
+					} else {
+						jiraRefs = append(jiraRefs, ref)
+					}
+				} else if bytes, ok := dbPR.JiraReferences.([]byte); ok {
+					var tempRefs []string
+					err := json.Unmarshal(bytes, &tempRefs)
+					if err == nil {
+						// jiraRefs = tempRefs // This would add the whole array as one. Iterate instead.
+						for _, refStr := range tempRefs {
+							if jiraURL != "" {
+								jiraRefs = append(jiraRefs, jiraURL+"/browse/"+refStr)
+							} else {
+								jiraRefs = append(jiraRefs, refStr)
+							}
+						}
+					} else {
+						// If unmarshal fails, it might be a plain string representation or PostgreSQL array literal string
+						s := string(bytes)
+						if s != "" && s != "null" && s != "[]" && !strings.HasPrefix(s, "{") { // Basic check to avoid adding "{}" etc.
+							logger.Warn("JiraReferences from DB was []byte but not valid JSON array, treating as single string", "raw", s, "error", err)
+							if jiraURL != "" {
+								jiraRefs = append(jiraRefs, jiraURL+"/browse/"+s)
+							} else {
+								jiraRefs = append(jiraRefs, s)
+							}
+						} else if strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}") && s != "{}" {
+							// Handle PostgreSQL array literal string like {"ref1","ref2"}
+							// This is a simplified parser, might need a more robust one for complex cases (escapes, quotes)
+							trimmed := strings.Trim(s, "{}")
+							if trimmed != "" {
+								splitRefs := strings.Split(trimmed, ",")
+								for _, r := range splitRefs { // Trim quotes if any, e.g. {"\"ref1\""}
+									refStr := strings.Trim(r, "\"")
+									if jiraURL != "" {
+										jiraRefs = append(jiraRefs, jiraURL+"/browse/"+refStr)
+									} else {
+										jiraRefs = append(jiraRefs, refStr)
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			if len(jiraRefs) > 0 {
+				hasJiraRef = true
+			}
+			apiPR.JiraReferences = jiraRefs
+			apiPR.HasJiraReference = hasJiraRef
 
 			if dbPR.LeadTimeToCodeSeconds != nil {
 				if pgNum, ok := dbPR.LeadTimeToCodeSeconds.(pgtype.Numeric); ok {

@@ -86,6 +86,8 @@ func main() {
 	http.HandleFunc("GET /teams/{teamName}/members", handlers.GetTeamMembersHandler(dbStore))
 	// Register the new diagnostic handler
 	http.HandleFunc("GET /diagnose/leadtimes", handlers.DiagnoseLeadTimesHandler(dbStore))
+	// Register the new JIRA references handler
+	http.HandleFunc("GET /prs/jira", handlers.GetPullRequestsJiraReferences(logger, dbStore))
 
 	port := "10000"                              // Default port, can be overridden by env var later if needed
 	logger.Info("Server starting", "port", port) // Use structured logging

@@ -65,6 +65,43 @@ func (q *Queries) CountPullRequests(ctx context.Context, arg CountPullRequestsPa
 	return column_1, err
 }
 
+const countPullRequestsWithJiraReferences = `-- name: CountPullRequestsWithJiraReferences :one
+SELECT COUNT(DISTINCT p.id) -- Ensure distinct PRs are counted
+FROM prs p
+LEFT JOIN teams t ON p.author = t.member -- Join with teams table
+WHERE
+    (COALESCE(p.title, '') ~ '[A-Z]+-[0-9]+' OR COALESCE(p.branch_name, '') ~ '[A-Z]+-[0-9]+')
+    AND p.created_at >= $1::timestamptz
+    AND p.created_at <= $2::timestamptz
+    AND ($3::text = '' OR
+         p.title ILIKE '%' || $3::text || '%' OR
+         p.branch_name ILIKE '%' || $3::text || '%' OR
+         p.author ILIKE '%' || $3::text || '%')
+    AND ($4::text = '' OR t.team = $4::text)
+    AND ($5::text[] IS NULL OR p.author = ANY($5::text[]))
+`
+
+type CountPullRequestsWithJiraReferencesParams struct {
+	StartDate      time.Time `db:"start_date"`
+	EndDate        time.Time `db:"end_date"`
+	TextSearchTerm string    `db:"text_search_term"`
+	TeamName       string    `db:"team_name"`
+	Members        []string  `db:"members"`
+}
+
+func (q *Queries) CountPullRequestsWithJiraReferences(ctx context.Context, arg CountPullRequestsWithJiraReferencesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countPullRequestsWithJiraReferences,
+		arg.StartDate,
+		arg.EndDate,
+		arg.TextSearchTerm,
+		arg.TeamName,
+		arg.Members,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countRepositories = `-- name: CountRepositories :one
 
 SELECT count(*) FROM repositories
@@ -739,6 +776,10 @@ SELECT
     p.reviews_requested AS pr_reviews_requested_count, -- Added for PR list display
     fc.first_commit_at,
     far.first_actual_review_at, -- Added for potential future use or if Go calculates all lead times
+    REGEXP_MATCHES(
+        COALESCE(p.title, '') || ' ' || COALESCE(p.branch_name, ''),
+        '([A-Z]+-[0-9]+)'
+    ) AS jira_references, -- Derived JIRA references
     CASE
         WHEN p.review_requested_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND p.review_requested_at > fc.first_commit_at
         THEN EXTRACT(EPOCH FROM (p.review_requested_at - fc.first_commit_at))
@@ -814,6 +855,7 @@ type ListPullRequestsRow struct {
 	PrReviewsRequestedCount pgtype.Int4        `db:"pr_reviews_requested_count"`
 	FirstCommitAt           interface{}        `db:"first_commit_at"`
 	FirstActualReviewAt     interface{}        `db:"first_actual_review_at"`
+	JiraReferences          interface{}        `db:"jira_references"`
 	LeadTimeToCodeSeconds   interface{}        `db:"lead_time_to_code_seconds"`
 	LeadTimeToReviewSeconds interface{}        `db:"lead_time_to_review_seconds"`
 	LeadTimeToMergeSeconds  interface{}        `db:"lead_time_to_merge_seconds"`
@@ -854,9 +896,192 @@ func (q *Queries) ListPullRequests(ctx context.Context, arg ListPullRequestsPara
 			&i.PrReviewsRequestedCount,
 			&i.FirstCommitAt,
 			&i.FirstActualReviewAt,
+			&i.JiraReferences,
 			&i.LeadTimeToCodeSeconds,
 			&i.LeadTimeToReviewSeconds,
 			&i.LeadTimeToMergeSeconds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPullRequestsWithJiraReferences = `-- name: ListPullRequestsWithJiraReferences :many
+
+SELECT
+    p.id,
+    p.title,
+    p.branch_name,
+    p.url,
+    p.author,
+    p.state,
+    p.created_at,
+    p.merged_at,
+    p.repository_name,
+    p.repository_owner,
+    REGEXP_MATCHES(
+        COALESCE(p.title, '') || ' ' || COALESCE(p.branch_name, ''),
+        '([A-Z]+-[0-9]+)'
+    ) AS jira_references
+FROM prs p
+LEFT JOIN teams t ON p.author = t.member -- Join with teams table
+WHERE
+    (COALESCE(p.title, '') ~ '[A-Z]+-[0-9]+' OR COALESCE(p.branch_name, '') ~ '[A-Z]+-[0-9]+') -- Condition for having Jira refs
+    AND p.created_at >= $1::timestamptz
+    AND p.created_at <= $2::timestamptz
+    AND ($3::text = '' OR
+         p.title ILIKE '%' || $3::text || '%' OR
+         p.branch_name ILIKE '%' || $3::text || '%' OR
+         p.author ILIKE '%' || $3::text || '%')
+    AND ($4::text = '' OR t.team = $4::text)
+    AND ($5::text[] IS NULL OR p.author = ANY($5::text[]))
+ORDER BY p.created_at DESC
+LIMIT $7::int OFFSET $6::int
+`
+
+type ListPullRequestsWithJiraReferencesParams struct {
+	StartDate      time.Time `db:"start_date"`
+	EndDate        time.Time `db:"end_date"`
+	TextSearchTerm string    `db:"text_search_term"`
+	TeamName       string    `db:"team_name"`
+	Members        []string  `db:"members"`
+	OffsetVal      int32     `db:"offset_val"`
+	PageSize       int32     `db:"page_size"`
+}
+
+type ListPullRequestsWithJiraReferencesRow struct {
+	ID              string             `db:"id"`
+	Title           sql.NullString     `db:"title"`
+	BranchName      sql.NullString     `db:"branch_name"`
+	Url             sql.NullString     `db:"url"`
+	Author          pgtype.Text        `db:"author"`
+	State           pgtype.Text        `db:"state"`
+	CreatedAt       time.Time          `db:"created_at"`
+	MergedAt        pgtype.Timestamptz `db:"merged_at"`
+	RepositoryName  pgtype.Text        `db:"repository_name"`
+	RepositoryOwner pgtype.Text        `db:"repository_owner"`
+	JiraReferences  interface{}        `db:"jira_references"`
+}
+
+// Pull Request JIRA References --
+func (q *Queries) ListPullRequestsWithJiraReferences(ctx context.Context, arg ListPullRequestsWithJiraReferencesParams) ([]ListPullRequestsWithJiraReferencesRow, error) {
+	rows, err := q.db.Query(ctx, listPullRequestsWithJiraReferences,
+		arg.StartDate,
+		arg.EndDate,
+		arg.TextSearchTerm,
+		arg.TeamName,
+		arg.Members,
+		arg.OffsetVal,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPullRequestsWithJiraReferencesRow{}
+	for rows.Next() {
+		var i ListPullRequestsWithJiraReferencesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.BranchName,
+			&i.Url,
+			&i.Author,
+			&i.State,
+			&i.CreatedAt,
+			&i.MergedAt,
+			&i.RepositoryName,
+			&i.RepositoryOwner,
+			&i.JiraReferences,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPullRequestsWithoutJiraReferences = `-- name: ListPullRequestsWithoutJiraReferences :many
+SELECT
+    p.id,
+    p.title,
+    p.branch_name,
+    p.url,
+    p.author,
+    p.state,
+    p.created_at,
+    p.merged_at,
+    p.repository_name,
+    p.repository_owner
+FROM prs p
+LEFT JOIN teams t ON p.author = t.member -- Join with teams table
+WHERE
+    (COALESCE(p.title, '') !~ '[A-Z]+-[0-9]+' AND COALESCE(p.branch_name, '') !~ '[A-Z]+-[0-9]+') -- Condition for NOT having Jira refs
+    AND p.created_at >= $1::timestamptz
+    AND p.created_at <= $2::timestamptz
+    AND ($3::text = '' OR
+         p.title ILIKE '%' || $3::text || '%' OR
+         p.branch_name ILIKE '%' || $3::text || '%' OR
+         p.author ILIKE '%' || $3::text || '%')
+    AND ($4::text = '' OR t.team = $4::text)
+    AND ($5::text[] IS NULL OR p.author = ANY($5::text[]))
+`
+
+type ListPullRequestsWithoutJiraReferencesParams struct {
+	StartDate      time.Time `db:"start_date"`
+	EndDate        time.Time `db:"end_date"`
+	TextSearchTerm string    `db:"text_search_term"`
+	TeamName       string    `db:"team_name"`
+	Members        []string  `db:"members"`
+}
+
+type ListPullRequestsWithoutJiraReferencesRow struct {
+	ID              string             `db:"id"`
+	Title           sql.NullString     `db:"title"`
+	BranchName      sql.NullString     `db:"branch_name"`
+	Url             sql.NullString     `db:"url"`
+	Author          pgtype.Text        `db:"author"`
+	State           pgtype.Text        `db:"state"`
+	CreatedAt       time.Time          `db:"created_at"`
+	MergedAt        pgtype.Timestamptz `db:"merged_at"`
+	RepositoryName  pgtype.Text        `db:"repository_name"`
+	RepositoryOwner pgtype.Text        `db:"repository_owner"`
+}
+
+func (q *Queries) ListPullRequestsWithoutJiraReferences(ctx context.Context, arg ListPullRequestsWithoutJiraReferencesParams) ([]ListPullRequestsWithoutJiraReferencesRow, error) {
+	rows, err := q.db.Query(ctx, listPullRequestsWithoutJiraReferences,
+		arg.StartDate,
+		arg.EndDate,
+		arg.TextSearchTerm,
+		arg.TeamName,
+		arg.Members,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPullRequestsWithoutJiraReferencesRow{}
+	for rows.Next() {
+		var i ListPullRequestsWithoutJiraReferencesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.BranchName,
+			&i.Url,
+			&i.Author,
+			&i.State,
+			&i.CreatedAt,
+			&i.MergedAt,
+			&i.RepositoryName,
+			&i.RepositoryOwner,
 		); err != nil {
 			return nil, err
 		}
