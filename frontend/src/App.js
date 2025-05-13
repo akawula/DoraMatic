@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import Button from "@mui/joy/Button"; // Import Button for Logout
 import { CssVarsProvider } from "@mui/joy/styles";
 import CssBaseline from "@mui/joy/CssBaseline";
 import Sheet from "@mui/joy/Sheet";
 import Typography from "@mui/joy/Typography";
+import Box from "@mui/joy/Box"; // For layout
 
 // Import extracted components
 import ModeToggle from "./components/ModeToggle";
+import Login from "./components/Login"; // Import Login component
+import authService from "./services/authService"; // Import authService
 import TeamSearch from "./components/TeamSearch";
 import DateRangePicker from "./components/DateRangePicker";
 import StatsGrid from "./components/StatsGrid";
@@ -49,6 +53,49 @@ function App() {
   const [prPageSize] = useState(20); // Match backend default/logic
   const [prTotalCount, setPrTotalCount] = useState(0);
   const [selectedMemberLogins, setSelectedMemberLogins] = useState(new Set());
+
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
+  const [currentUsername, setCurrentUsername] = useState(authService.getCurrentUsername());
+
+  const handleLoginSuccess = () => {
+    setIsAuthenticated(true);
+    setCurrentUsername(authService.getCurrentUsername()); // Set username from service
+    // Reset states that might hold data from a previous unauthenticated view or another user
+    setSearchTerm("");
+    setTeamOptions([]);
+    setSelectedTeam(null);
+    setStats(null);
+    setTeamMembers([]);
+    setPullRequests([]);
+    setPrCurrentPage(1);
+    setPrTotalCount(0);
+    setSelectedMemberLogins(new Set());
+    setError(null);
+    setMembersError(null);
+    setPrsError(null);
+    setFetchAttempted(false);
+  };
+
+  const handleLogout = () => {
+    authService.logout();
+    setIsAuthenticated(false);
+    setCurrentUsername(null); // Clear username
+    // Clear all data that might be user-specific or session-specific
+    setSearchTerm("");
+    setTeamOptions([]);
+    setSelectedTeam(null);
+    setStats(null);
+    setTeamMembers([]);
+    setPullRequests([]);
+    setPrCurrentPage(1);
+    setPrTotalCount(0);
+    setSelectedMemberLogins(new Set());
+    setError(null);
+    setMembersError(null);
+    setPrsError(null);
+    setFetchAttempted(false);
+  };
 
   // Data fetching logic remains here
   const fetchTeams = useCallback(async (prefix) => {
@@ -223,8 +270,14 @@ function App() {
           : undefined;
 
       const promises = [];
+      const token = authService.getToken();
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
 
       if (fetchStats) {
+        // Assuming /stats endpoint might also be protected or will be in the future
         promises.push(
           axios
             .get(`/teams/${encodeURIComponent(selectedTeam)}/stats`, {
@@ -233,12 +286,16 @@ function App() {
                 end_date: rfcEndDate,
                 members: membersQueryParam,
               },
+              headers: headers, // Add headers here too if stats becomes protected
             })
             .then((response) => setStats(response.data))
             .catch((err) => {
               console.error("Error fetching stats:", err);
               setError(`Failed to fetch stats for team "${selectedTeam}".`);
               setStats(null);
+              if (err.response && err.response.status === 401) {
+                handleLogout(); // Logout if unauthorized
+              }
             })
             .finally(() => setLoadingStats(false))
         );
@@ -246,15 +303,16 @@ function App() {
 
       promises.push(
         axios
-          .get(`/prs`, { // Reverted endpoint to /prs for general PR listing
+          .get(`/api/prs`, { // Updated endpoint to /api/prs (protected)
             params: {
               start_date: rfcStartDate,
               end_date: rfcEndDate,
-              team: selectedTeam, // Pass selectedTeam as 'team'
-              members: membersQueryParam, // Pass selected member logins as 'members'
+              team: selectedTeam,
+              members: membersQueryParam,
               page: page,
               page_size: prPageSize,
             },
+            headers: headers, // Send token for protected route
           })
           .then((response) => {
             setPullRequests(response.data?.pull_requests || []);
@@ -265,6 +323,9 @@ function App() {
             setPrsError(`Failed to fetch pull requests.`);
             setPullRequests([]);
             setPrTotalCount(0);
+            if (err.response && err.response.status === 401) {
+              handleLogout(); // Logout if unauthorized
+            }
           })
           .finally(() => setLoadingPRs(false))
       );
@@ -343,12 +404,26 @@ function App() {
   };
 
   // Render the components, passing state and handlers as props
+  if (!isAuthenticated) {
+    return (
+      <CssVarsProvider>
+        <CssBaseline />
+        <Login onLoginSuccess={handleLoginSuccess} />
+      </CssVarsProvider>
+    );
+  }
+
   return (
     <CssVarsProvider>
       <CssBaseline />
-      <ModeToggle />
-      <Sheet sx={{ p: 4, mt: 4 }}>
-        {" "}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
+        <ModeToggle />
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {currentUsername && <Typography sx={{ mr: 2 }}>Logged in as: {currentUsername}</Typography>}
+          <Button onClick={handleLogout} color="danger" variant="soft">Logout</Button>
+        </Box>
+      </Box>
+      <Sheet sx={{ p: 4, mt: 0 }}> {/* Adjusted mt from 4 to 0 as ModeToggle/Logout are now above */}
         <Typography level="h3" component="h1" gutterBottom>
           Team Performance Metrics
         </Typography>

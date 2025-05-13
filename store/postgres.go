@@ -557,6 +557,21 @@ func (p *Postgres) ListPullRequests(ctx context.Context, arg sqlc.ListPullReques
 	return prs, nil
 }
 
+// GetUserByUsername implements the Store interface method by calling the generated sqlc query.
+func (p *Postgres) GetUserByUsername(ctx context.Context, username string) (sqlc.User, error) {
+	user, err := p.queries.GetUserByUsername(ctx, username)
+	if err != nil {
+		// It's important to return pgx.ErrNoRows as is, so the caller can check for it.
+		if err == pgx.ErrNoRows {
+			return sqlc.User{}, err
+		}
+		// Log other errors
+		p.Logger.Error("Failed to get user by username from DB", "username", username, "error", err)
+		return sqlc.User{}, err
+	}
+	return user, nil
+}
+
 // CountPullRequests implements the Store interface method by calling the generated sqlc query.
 func (p *Postgres) CountPullRequests(ctx context.Context, arg sqlc.CountPullRequestsParams) (int32, error) {
 	count, err := p.queries.CountPullRequests(ctx, arg)

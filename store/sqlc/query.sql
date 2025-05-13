@@ -481,6 +481,22 @@ WHERE
     AND (sqlc.arg(team_name)::text = '' OR t.team = sqlc.arg(team_name)::text)
     AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[]));
 
+-- Users --
+
+-- name: CreateUser :one
+INSERT INTO users (
+    username,
+    hashed_password
+) VALUES (
+    $1, $2
+)
+RETURNING *;
+
+-- name: GetUserByUsername :one
+SELECT id, username, hashed_password, created_at, updated_at
+FROM users
+WHERE username = $1;
+
 -- name: ListPullRequestsWithoutJiraReferences :many
 SELECT
     p.id,

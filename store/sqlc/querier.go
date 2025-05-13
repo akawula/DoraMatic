@@ -20,6 +20,8 @@ type Querier interface {
 	CountTeamCommitsByDateRange(ctx context.Context, arg CountTeamCommitsByDateRangeParams) (int32, error)
 	CreateRepository(ctx context.Context, arg CreateRepositoryParams) error
 	CreateTeamMember(ctx context.Context, arg CreateTeamMemberParams) error
+	// Users --
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// Filter by selected members
 	// FirstReviewPerPR AS ( -- No longer needed
 	//     SELECT
@@ -40,6 +42,7 @@ type Querier interface {
 	GetTeamMembers(ctx context.Context, team string) ([]GetTeamMembersRow, error)
 	// Filter by PR merge date
 	GetTeamPullRequestStatsByDateRange(ctx context.Context, arg GetTeamPullRequestStatsByDateRangeParams) (GetTeamPullRequestStatsByDateRangeRow, error)
+	GetUserByUsername(ctx context.Context, username string) (User, error)
 	// Commits --
 	InsertCommit(ctx context.Context, arg InsertCommitParams) error
 	// List Pull Requests (Paginated & Searchable by Title/Author and optionally Team) --

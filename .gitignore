@@ -6,3 +6,4 @@ db_backup*
 coverage.out
 node_modules
 *-results.json
+/bin/

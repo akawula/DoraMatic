@@ -58,3 +58,11 @@ type Team struct {
 	Member    string         `db:"member"`
 	AvatarUrl sql.NullString `db:"avatar_url"`
 }
+
+type User struct {
+	ID             int32     `db:"id"`
+	Username       string    `db:"username"`
+	HashedPassword string    `db:"hashed_password"`
+	CreatedAt      time.Time `db:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at"`
+}

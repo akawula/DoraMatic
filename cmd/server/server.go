@@ -11,9 +11,10 @@ import (
 	"time"
 
 	// Assuming 'github.com/akawula/DoraMatic' is your module path in go.mod
-	"github.com/akawula/DoraMatic/cmd/server/handlers"
-	"github.com/akawula/DoraMatic/store" // Import the store package
-	_ "github.com/lib/pq"                // PostgreSQL driver needed by pgx? Check pgx docs. Keep for now.
+	"github.com/akawula/DoraMatic/cmd/server/auth"     // Import the auth package
+	"github.com/akawula/DoraMatic/cmd/server/handlers" // Import the handlers package
+	"github.com/akawula/DoraMatic/store"               // Import the store package
+	_ "github.com/lib/pq"                              // PostgreSQL driver
 )
 
 func debug() slog.Level {
@@ -80,8 +81,13 @@ func main() {
 	http.HandleFunc("GET /search/teams", handlers.SearchTeamsHandler(dbStore))
 	// Register the team stats handler
 	http.HandleFunc("GET /teams/{teamName}/stats", handlers.GetTeamStatsHandler(dbStore))
-	// Register the new pull requests list handler
-	http.HandleFunc("GET /prs", handlers.GetPullRequests(logger, dbStore))
+
+	// --- Auth Routes ---
+	http.HandleFunc("POST /api/auth/login", handlers.LoginHandler(dbStore))
+
+	// --- Protected Routes ---
+	// Register the new pull requests list handler, now protected by JWT middleware
+	http.Handle("GET /api/prs", auth.JWTMiddleware(http.HandlerFunc(handlers.GetPullRequests(logger, dbStore))))
 	// Register the new team members handler
 	http.HandleFunc("GET /teams/{teamName}/members", handlers.GetTeamMembersHandler(dbStore))
 	// Register the new diagnostic handler

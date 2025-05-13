@@ -79,6 +79,20 @@ migrate-force:
 	@echo "Forcing migration version $(VERSION)..."
 	$(HOME)/go/bin/migrate -database '$(DB_URL)' -path $(MIGRATION_PATH) force $(VERSION)
 
+# Add a new user to the database
+# Usage: make add-user USERNAME=newuser PASSWORD=securepassword123
+add-user:
+	@if [ -z "$(USERNAME)" ] || [ -z "$(PASSWORD)" ]; then \
+		echo "Error: USERNAME and PASSWORD must be set. Usage: make add-user USERNAME=<name> PASSWORD=<pass>"; \
+		exit 1; \
+	fi
+	@echo "Building userctl tool..."
+	@mkdir -p $(CURDIR)/bin # Ensure bin directory exists
+	GOBIN=$(CURDIR)/bin go install ./cmd/userctl
+	@echo "Adding user: $(USERNAME)..."
+	@USERNAME=$(USERNAME) PASSWORD=$(PASSWORD) $(CURDIR)/bin/userctl
+	@echo "User addition process complete. Check output above for success or errors."
+
 # Database Backup (for Kubernetes deployment)
 # Requires kubectl configured for your cluster
 db-backup:

@@ -67,6 +67,9 @@ type Store interface {
 	CountPullRequestsWithoutJiraReferences(ctx context.Context, arg sqlc.CountPullRequestsWithoutJiraReferencesParams) (int64, error)
 	ListPullRequestsWithJiraReferences(ctx context.Context, arg sqlc.ListPullRequestsWithJiraReferencesParams) ([]sqlc.ListPullRequestsWithJiraReferencesRow, error)
 	ListPullRequestsWithoutJiraReferencesWithPagination(ctx context.Context, arg sqlc.ListPullRequestsWithoutJiraReferencesParamsWithPagination) ([]sqlc.ListPullRequestsWithoutJiraReferencesRow, error)
+
+	// User methods
+	GetUserByUsername(ctx context.Context, username string) (sqlc.User, error)
 	// Removed duplicate Close()
 }
 

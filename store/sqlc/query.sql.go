@@ -181,6 +181,36 @@ func (q *Queries) CreateTeamMember(ctx context.Context, arg CreateTeamMemberPara
 	return err
 }
 
+const createUser = `-- name: CreateUser :one
+
+INSERT INTO users (
+    username,
+    hashed_password
+) VALUES (
+    $1, $2
+)
+RETURNING id, username, hashed_password, created_at, updated_at
+`
+
+type CreateUserParams struct {
+	Username       string `db:"username"`
+	HashedPassword string `db:"hashed_password"`
+}
+
+// Users --
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createUser, arg.Username, arg.HashedPassword)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.HashedPassword,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const diagnoseLeadTimes = `-- name: DiagnoseLeadTimes :many
 
 WITH FirstCommitPerPR AS (
@@ -715,6 +745,25 @@ func (q *Queries) GetTeamPullRequestStatsByDateRange(ctx context.Context, arg Ge
 		&i.TotalDeletions,
 		&i.TotalTeamReviewsSubmitted,
 		&i.DistinctTeamReviewersCount,
+	)
+	return i, err
+}
+
+const getUserByUsername = `-- name: GetUserByUsername :one
+SELECT id, username, hashed_password, created_at, updated_at
+FROM users
+WHERE username = $1
+`
+
+func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByUsername, username)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.HashedPassword,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
