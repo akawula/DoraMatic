@@ -1,15 +1,24 @@
-FROM golang:1.23 AS build
+FROM golang:1.24 AS build
 
-WORKDIR /
+WORKDIR /app
+
+# Copy module files first
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the rest of the application source code
 COPY . .
 
-RUN go mod download
-RUN CGO_ENABLED=0 go build -o cron cmd/cronjob/cronjob.go
+# Build the cronjob. Output will be /app/cron
+RUN CGO_ENABLED=0 go build -o cron ./cmd/cronjob/cronjob.go
 
 FROM gcr.io/distroless/static-debian11
 WORKDIR /app
 
-COPY --from=build cron cron
-COPY --from=build /migrations ./migrations
+# Copy the compiled binary from /app/cron in build stage to /app/cron in final stage
+COPY --from=build /app/cron .
+
+# Copy migrations from /app/migrations/ in build stage to /app/migrations/ in final stage
+COPY --from=build /app/migrations/ ./migrations/
 
 ENTRYPOINT ["/app/cron"]

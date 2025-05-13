@@ -1,8 +1,8 @@
-const API_URL = '/api/auth/'; // Adjust if your API prefix is different
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || ''; // Use environment variable or default to relative path for local dev proxy
 
 const login = async (username, password) => {
   try {
-    const response = await fetch(API_URL + 'login', {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

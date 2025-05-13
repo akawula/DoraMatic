@@ -279,6 +279,19 @@ function PullRequestList({
           </Table>
         </Box>
       )}
+
+      {pullRequests && pullRequests.length > 0 && sortedPullRequests.length > 0 && (
+        <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 'sm' }}>
+          <Typography level="title-sm" sx={{ mb: 1 }}>Legend:</Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 1 }}>
+            <Typography level="body-xs"><strong>LT Code:</strong> Lead Time to Code - Time from first commit to PR creation.</Typography>
+            <Typography level="body-xs"><strong>LT Review:</strong> Lead Time to Review - Time from PR creation to first review.</Typography>
+            <Typography level="body-xs"><strong>LT Merge:</strong> Lead Time to Merge - Time from PR creation to merge.</Typography>
+            <Typography level="body-xs"><strong>Reviews Req.:</strong> Number of reviews requested for the PR.</Typography>
+            <Typography level="body-xs"><strong>Size:</strong> PR size based on total changes (XS, S, M, L, XL).</Typography>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }

@@ -78,9 +78,9 @@ func main() {
 
 	// Use handlers from the handlers package
 	http.HandleFunc("GET /livez", handlers.LivezHandler) // Pass the function directly
-	http.HandleFunc("GET /search/teams", handlers.SearchTeamsHandler(dbStore))
+	http.HandleFunc("GET /api/search/teams", handlers.SearchTeamsHandler(dbStore)) // Added /api prefix
 	// Register the team stats handler
-	http.HandleFunc("GET /teams/{teamName}/stats", handlers.GetTeamStatsHandler(dbStore))
+	http.HandleFunc("GET /api/teams/{teamName}/stats", handlers.GetTeamStatsHandler(dbStore)) // Added /api prefix
 
 	// --- Auth Routes ---
 	http.HandleFunc("POST /api/auth/login", handlers.LoginHandler(dbStore))
@@ -89,13 +89,13 @@ func main() {
 	// Register the new pull requests list handler, now protected by JWT middleware
 	http.Handle("GET /api/prs", auth.JWTMiddleware(http.HandlerFunc(handlers.GetPullRequests(logger, dbStore))))
 	// Register the new team members handler
-	http.HandleFunc("GET /teams/{teamName}/members", handlers.GetTeamMembersHandler(dbStore))
+	http.HandleFunc("GET /api/teams/{teamName}/members", handlers.GetTeamMembersHandler(dbStore)) // Added /api prefix
 	// Register the new diagnostic handler
-	http.HandleFunc("GET /diagnose/leadtimes", handlers.DiagnoseLeadTimesHandler(dbStore))
+	http.HandleFunc("GET /diagnose/leadtimes", handlers.DiagnoseLeadTimesHandler(dbStore)) // This might need /api/ if called from frontend and protected
 	// Register the new JIRA references handler
-	http.HandleFunc("GET /prs/jira", handlers.GetPullRequestsJiraReferences(logger, dbStore))
+	http.HandleFunc("GET /prs/jira", handlers.GetPullRequestsJiraReferences(logger, dbStore)) // This might need /api/ if called from frontend and protected
 
-	port := "10000"                              // Default port, can be overridden by env var later if needed
+	port := "8080"                               // Changed default port to 8080
 	logger.Info("Server starting", "port", port) // Use structured logging
 
 	// Configure the server with timeouts

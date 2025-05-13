@@ -106,7 +106,7 @@ function App() {
     setLoadingTeams(true);
     setError(null);
     try {
-      const response = await axios.get(`/search/teams`, {
+      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL || ''}/api/search/teams`, { // Added /api prefix
         params: { q: prefix },
       });
       setTeamOptions(response.data || []);
@@ -141,7 +141,7 @@ function App() {
       setPrsError(null);
 
       axios
-        .get(`/teams/${encodeURIComponent(selectedTeam)}/members`)
+        .get(`${process.env.REACT_APP_API_BASE_URL || ''}/api/teams/${encodeURIComponent(selectedTeam)}/members`) // Added /api prefix
         .then((response) => {
           const fetchedTeamMembers = response.data || [];
           setTeamMembers(fetchedTeamMembers);
@@ -280,7 +280,7 @@ function App() {
         // Assuming /stats endpoint might also be protected or will be in the future
         promises.push(
           axios
-            .get(`/teams/${encodeURIComponent(selectedTeam)}/stats`, {
+            .get(`${process.env.REACT_APP_API_BASE_URL || ''}/api/teams/${encodeURIComponent(selectedTeam)}/stats`, { // Added /api prefix
               params: {
                 start_date: rfcStartDate,
                 end_date: rfcEndDate,
