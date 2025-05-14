@@ -99,7 +99,7 @@ ORDER BY p.additions + p.deletions DESC;
 -- name: SearchDistinctTeamNamesByPrefix :many
 SELECT DISTINCT team
 FROM teams
-WHERE team ILIKE $1 || '%' -- Case-insensitive prefix search
+WHERE team ILIKE '%' || $1 || '%' -- Case-insensitive prefix search
 ORDER BY team;
 
 -- name: GetTeamMembers :many
@@ -311,7 +311,7 @@ FirstActualReviewPerPR AS ( -- Added for consistency, though not directly used f
     WHERE state = 'APPROVED' OR state = 'CHANGES_REQUESTED'
     GROUP BY pull_request_id
 )
-SELECT
+SELECT DISTINCT -- Added DISTINCT
     p.id,
     p.repository_name,
     p.title,
@@ -373,12 +373,12 @@ WHERE
         p.author ILIKE '%' || sqlc.arg(filter_author)::text || '%'
     )
     AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[])) -- Filter by selected members
-ORDER BY p.merged_at DESC -- Default sort by merged_at
+ORDER BY p.merged_at DESC, p.id ASC -- Default sort by merged_at, then by ID for stable pagination
 LIMIT sqlc.arg(page_size)::int
 OFFSET sqlc.arg(offset_val)::int;
 
 -- name: CountPullRequests :one
-SELECT COUNT(p.*)::int -- Count distinct PRs
+SELECT COUNT(DISTINCT p.id)::int -- Count distinct PR IDs
 FROM prs p
 LEFT JOIN teams t ON p.author = t.member -- Join with teams table
 WHERE
@@ -395,7 +395,7 @@ WHERE
     )
     AND ( -- Optionally filter by state
         sqlc.arg(filter_state)::text = '' OR
-        p.state = sqlc.arg(filter_state)::text
+        p.state ILIKE '%' || sqlc.arg(filter_state)::text || '%'
     )
     AND ( -- Optionally filter by author (case-insensitive)
         sqlc.arg(filter_author)::text = '' OR

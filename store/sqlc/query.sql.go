@@ -14,7 +14,7 @@ import (
 )
 
 const countPullRequests = `-- name: CountPullRequests :one
-SELECT COUNT(p.*)::int -- Count distinct PRs
+SELECT COUNT(DISTINCT p.id)::int -- Count distinct PR IDs
 FROM prs p
 LEFT JOIN teams t ON p.author = t.member -- Join with teams table
 WHERE
@@ -31,7 +31,7 @@ WHERE
     )
     AND ( -- Optionally filter by state
         $5::text = '' OR
-        p.state = $5::text
+        p.state ILIKE '%' || $5::text || '%'
     )
     AND ( -- Optionally filter by author (case-insensitive)
         $6::text = '' OR
@@ -810,7 +810,7 @@ FirstActualReviewPerPR AS ( -- Added for consistency, though not directly used f
     WHERE state = 'APPROVED' OR state = 'CHANGES_REQUESTED'
     GROUP BY pull_request_id
 )
-SELECT
+SELECT DISTINCT -- Added DISTINCT
     p.id,
     p.repository_name,
     p.title,
@@ -872,7 +872,7 @@ WHERE
         p.author ILIKE '%' || $6::text || '%'
     )
     AND ($7::text[] IS NULL OR p.author = ANY($7::text[])) -- Filter by selected members
-ORDER BY p.merged_at DESC -- Default sort by merged_at
+ORDER BY p.merged_at DESC, p.id ASC -- Default sort by merged_at, then by ID for stable pagination
 LIMIT $9::int
 OFFSET $8::int
 `
@@ -1179,7 +1179,7 @@ func (q *Queries) ListRepositories(ctx context.Context, arg ListRepositoriesPara
 const searchDistinctTeamNamesByPrefix = `-- name: SearchDistinctTeamNamesByPrefix :many
 SELECT DISTINCT team
 FROM teams
-WHERE team ILIKE $1 || '%' -- Case-insensitive prefix search
+WHERE team ILIKE '%' || $1 || '%' -- Case-insensitive prefix search
 ORDER BY team
 `
 
