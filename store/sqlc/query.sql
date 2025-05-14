@@ -296,14 +296,45 @@ WHERE
 -- List Pull Requests (Paginated & Searchable by Title/Author and optionally Team) --
 
 -- name: ListPullRequests :many
-WITH FirstCommitPerPR AS (
+WITH MatchedPRs AS (
+    SELECT DISTINCT p.id as pr_id -- Alias for clarity in join
+    FROM prs p
+    LEFT JOIN teams t ON p.author = t.member
+    WHERE
+        p.merged_at >= sqlc.arg(start_date)::timestamptz
+        AND p.merged_at <= sqlc.arg(end_date)::timestamptz
+        AND ( -- Filter by search term (title, author, or JIRA reference)
+            sqlc.arg(search_term)::text = '' OR
+            p.title ILIKE '%' || sqlc.arg(search_term)::text || '%' OR
+            p.author ILIKE '%' || sqlc.arg(search_term)::text || '%' OR
+            EXISTS (
+                SELECT 1
+                FROM regexp_matches(COALESCE(p.title, '') || ' ' || COALESCE(p.branch_name, ''), '([A-Z]+-[0-9]+)', 'g') AS s(jira_id_arr)
+                WHERE jira_id_arr[1] ILIKE ('%' || sqlc.arg(search_term)::text || '%')
+            )
+        )
+        AND ( -- Optionally filter by team name
+            sqlc.arg(team_name)::text = '' OR
+            t.team = sqlc.arg(team_name)::text
+        )
+        AND ( -- Optionally filter by state
+            sqlc.arg(filter_state)::text = '' OR
+            p.state ILIKE '%' || sqlc.arg(filter_state)::text || '%'
+        )
+        AND ( -- Optionally filter by author (case-insensitive)
+            sqlc.arg(filter_author)::text = '' OR
+            p.author ILIKE '%' || sqlc.arg(filter_author)::text || '%'
+        )
+        AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[])) -- Filter by selected members
+),
+FirstCommitPerPR AS (
     SELECT
         pr_id,
         MIN(created_at) as first_commit_at
     FROM commits
     GROUP BY pr_id
 ),
-FirstActualReviewPerPR AS ( -- Added for consistency, though not directly used for display yet
+FirstActualReviewPerPR AS (
     SELECT
         pull_request_id,
         MIN(submitted_at) as first_actual_review_at
@@ -311,25 +342,22 @@ FirstActualReviewPerPR AS ( -- Added for consistency, though not directly used f
     WHERE state = 'APPROVED' OR state = 'CHANGES_REQUESTED'
     GROUP BY pull_request_id
 )
-SELECT DISTINCT -- Added DISTINCT
+SELECT
     p.id,
     p.repository_name,
     p.title,
     p.author,
     p.state,
-    p.created_at AS pr_created_at, -- Renamed for clarity
-    p.merged_at AS pr_merged_at,   -- Renamed for clarity
+    p.created_at AS pr_created_at,
+    p.merged_at AS pr_merged_at,
     p.additions,
     p.deletions,
     p.url,
-    p.review_requested_at AS pr_review_requested_at, -- Renamed for clarity
-    p.reviews_requested AS pr_reviews_requested_count, -- Added for PR list display
+    p.review_requested_at AS pr_review_requested_at,
+    p.reviews_requested AS pr_reviews_requested_count,
     fc.first_commit_at,
-    far.first_actual_review_at, -- Added for potential future use or if Go calculates all lead times
-    REGEXP_MATCHES(
-        COALESCE(p.title, '') || ' ' || COALESCE(p.branch_name, ''),
-        '([A-Z]+-[0-9]+)'
-    ) AS jira_references, -- Derived JIRA references
+    far.first_actual_review_at,
+    (SELECT array_agg(m[1]) FROM regexp_matches(COALESCE(p.title, '') || ' ' || COALESCE(p.branch_name, ''), '([A-Z]+-[0-9]+)', 'g') AS m) AS jira_references,
     CASE
         WHEN p.review_requested_at IS NOT NULL AND fc.first_commit_at IS NOT NULL AND p.review_requested_at > fc.first_commit_at
         THEN EXTRACT(EPOCH FROM (p.review_requested_at - fc.first_commit_at))
@@ -346,34 +374,10 @@ SELECT DISTINCT -- Added DISTINCT
         ELSE NULL
     END AS lead_time_to_merge_seconds
 FROM prs p
+JOIN MatchedPRs m_prs ON p.id = m_prs.pr_id -- Join with the matched PR IDs
 LEFT JOIN FirstCommitPerPR fc ON p.id = fc.pr_id
-LEFT JOIN FirstActualReviewPerPR far ON p.id = far.pull_request_id -- Joined
-LEFT JOIN teams t ON p.author = t.member -- Join with teams table for filtering
-WHERE
-    -- Date filtering should apply to the primary event defining the list, e.g., merged_at or created_at
-    -- For this example, let's assume filtering by merged_at for a list of merged PRs.
-    -- Adjust as needed if the list criteria change (e.g., all open PRs, PRs created in range).
-    p.merged_at >= sqlc.arg(start_date)::timestamptz
-    AND p.merged_at <= sqlc.arg(end_date)::timestamptz
-    AND ( -- Filter by search term (title or author)
-        sqlc.arg(search_term)::text = '' OR
-        p.title ILIKE '%' || sqlc.arg(search_term)::text || '%' OR
-        p.author ILIKE '%' || sqlc.arg(search_term)::text || '%'
-    )
-    AND ( -- Optionally filter by team name
-        sqlc.arg(team_name)::text = '' OR
-        t.team = sqlc.arg(team_name)::text
-    )
-    AND ( -- Optionally filter by state
-        sqlc.arg(filter_state)::text = '' OR
-        p.state ILIKE '%' || sqlc.arg(filter_state)::text || '%'
-    )
-    AND ( -- Optionally filter by author (case-insensitive)
-        sqlc.arg(filter_author)::text = '' OR
-        p.author ILIKE '%' || sqlc.arg(filter_author)::text || '%'
-    )
-    AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[])) -- Filter by selected members
-ORDER BY p.merged_at DESC, p.id ASC -- Default sort by merged_at, then by ID for stable pagination
+LEFT JOIN FirstActualReviewPerPR far ON p.id = far.pull_request_id
+ORDER BY p.merged_at DESC, p.id ASC
 LIMIT sqlc.arg(page_size)::int
 OFFSET sqlc.arg(offset_val)::int;
 
@@ -384,10 +388,15 @@ LEFT JOIN teams t ON p.author = t.member -- Join with teams table
 WHERE
     p.merged_at >= sqlc.arg(start_date)::timestamptz -- Ensure this matches ListPullRequests criteria
     AND p.merged_at <= sqlc.arg(end_date)::timestamptz
-    AND ( -- Filter by search term (title or author)
+    AND ( -- Filter by search term (title, author, or JIRA reference)
         sqlc.arg(search_term)::text = '' OR
         p.title ILIKE '%' || sqlc.arg(search_term)::text || '%' OR
-        p.author ILIKE '%' || sqlc.arg(search_term)::text || '%'
+        p.author ILIKE '%' || sqlc.arg(search_term)::text || '%' OR
+        EXISTS (
+            SELECT 1
+            FROM regexp_matches(COALESCE(p.title, '') || ' ' || COALESCE(p.branch_name, ''), '([A-Z]+-[0-9]+)', 'g') AS s(jira_id_arr)
+            WHERE jira_id_arr[1] ILIKE ('%' || sqlc.arg(search_term)::text || '%')
+        )
     )
     AND ( -- Optionally filter by team name
         sqlc.arg(team_name)::text = '' OR

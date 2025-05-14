@@ -154,7 +154,7 @@ func GetPullRequests(logger *slog.Logger, db store.Store) http.HandlerFunc {
 			return
 		}
 
-		logger.Debug("Counting pull requests", "params", countParams)
+		logger.Debug("Counting pull requests", "params", countParams, "length", len(dbPRs))
 		totalCount, err := db.CountPullRequests(ctx, countParams)
 		if err != nil {
 			logger.Error("Failed to count pull requests from DB", "error", err)

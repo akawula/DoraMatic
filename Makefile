@@ -32,7 +32,7 @@ run-frontend: ## Run the frontend development server
 	cd frontend && npm start
 
 dev: ## Run both server and frontend for development
-	make run-server & make run-frontend
+	DEBUG=1 make run-server & make run-frontend
 
 clean: ## Remove the build artifacts
 	rm -rf ./app
