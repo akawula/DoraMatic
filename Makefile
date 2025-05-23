@@ -137,6 +137,20 @@ add-user: ## Add a new user to the database (USERNAME and PASSWORD args required
 	@USERNAME=$(USERNAME) PASSWORD=$(PASSWORD) $(CURDIR)/bin/userctl
 	@echo "User addition process complete. Check output above for success or errors."
 
+# Database Dump (Local)
+# Requires pg_dump to be installed and the following environment variables to be set:
+# POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_SERVICE_HOST, POSTGRES_SERVICE_PORT, POSTGRES_DB
+db-dump-local: ## Dump the PostgreSQL database locally to a timestamped SQL file
+	@echo "Dumping database locally..."
+	@if [ -z "$(POSTGRES_USER)" ] || [ -z "$(POSTGRES_PASSWORD)" ] || [ -z "$(POSTGRES_SERVICE_HOST)" ] || [ -z "$(POSTGRES_SERVICE_PORT)" ] || [ -z "$(POSTGRES_DB)" ]; then \
+		echo "Error: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_SERVICE_HOST, POSTGRES_SERVICE_PORT, and POSTGRES_DB must be set."; \
+		exit 1; \
+	fi
+	@BACKUP_FILE="db_dump_$$(date +%Y%m%d_%H%M%S).sql"; \
+	echo "Saving dump to: $$BACKUP_FILE"; \
+	PGPASSWORD=$(POSTGRES_PASSWORD) pg_dump -h $(POSTGRES_SERVICE_HOST) -p $(POSTGRES_SERVICE_PORT) -U $(POSTGRES_USER) $(POSTGRES_DB) > $$BACKUP_FILE; \
+	echo "Local database dump complete: $$BACKUP_FILE"
+
 # Database Backup (for Kubernetes deployment)
 # Requires kubectl configured for your cluster
 db-backup: ## Backup the PostgreSQL database from the Kubernetes pod
