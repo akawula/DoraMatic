@@ -1,0 +1,24 @@
+FROM golang:1.25 AS build
+
+WORKDIR /app
+
+# Copy module files first
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the rest of the application source code
+COPY . .
+
+# Build the sonarqube-sync job. Output will be /app/sonarqube-sync
+RUN CGO_ENABLED=0 go build -o sonarqube-sync ./cmd/sonarqube-sync/sonarqube-sync.go
+
+FROM gcr.io/distroless/static-debian11
+WORKDIR /app
+
+# Copy the compiled binary from /app/sonarqube-sync in build stage to /app/sonarqube-sync in final stage
+COPY --from=build /app/sonarqube-sync .
+
+# Copy migrations from /app/migrations/ in build stage to /app/migrations/ in final stage
+COPY --from=build /app/migrations/ ./migrations/
+
+ENTRYPOINT ["/app/sonarqube-sync"]

@@ -10,12 +10,12 @@ import (
 
 	// Import packages needed for mocks and App struct
 	"github.com/akawula/DoraMatic/github/client"
+	"github.com/akawula/DoraMatic/github/organizations" // Import organizations for MemberInfo
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
-	ghTypes "github.com/shurcooL/githubv4" // Alias to avoid conflict
 	"github.com/akawula/DoraMatic/store"
-	"github.com/akawula/DoraMatic/github/organizations" // Import organizations for MemberInfo
 	"github.com/akawula/DoraMatic/store/sqlc" // For store method signatures
+	ghTypes "github.com/shurcooL/githubv4"    // Alias to avoid conflict
 )
 
 // --- Mocks ---
@@ -36,39 +36,39 @@ func (m *MockGitHubClient) Query(ctx context.Context, q interface{}, variables m
 // MockStore implements store.Store for testing
 type MockStore struct {
 	// Updated SaveTeamsFunc signature
-	SaveTeamsFunc               func(ctx context.Context, teams map[string][]organizations.MemberInfo) error
-	GetLastPRDateFunc           func(ctx context.Context, org string, repo string) time.Time
-	SavePullRequestFunc         func(ctx context.Context, prs []pullrequests.PullRequest) error
+	SaveTeamsFunc                 func(ctx context.Context, teams map[string][]organizations.MemberInfo) error
+	GetLastPRDateFunc             func(ctx context.Context, org string, repo string) time.Time
+	SavePullRequestFunc           func(ctx context.Context, prs []pullrequests.PullRequest) error
 	FetchSecurityPullRequestsFunc func() ([]store.SecurityPR, error)
-	CloseFunc                   func()
+	CloseFunc                     func()
 	// New methods for team stats
-	CountTeamCommitsByDateRangeFunc      func(ctx context.Context, arg sqlc.CountTeamCommitsByDateRangeParams) (int32, error)
+	CountTeamCommitsByDateRangeFunc        func(ctx context.Context, arg sqlc.CountTeamCommitsByDateRangeParams) (int32, error)
 	GetTeamPullRequestStatsByDateRangeFunc func(ctx context.Context, arg sqlc.GetTeamPullRequestStatsByDateRangeParams) (sqlc.GetTeamPullRequestStatsByDateRangeRow, error)
 	// New methods for listing PRs
-	ListPullRequestsFunc                 func(ctx context.Context, arg sqlc.ListPullRequestsParams) ([]sqlc.ListPullRequestsRow, error)
-	CountPullRequestsFunc                func(ctx context.Context, arg sqlc.CountPullRequestsParams) (int32, error)
+	ListPullRequestsFunc  func(ctx context.Context, arg sqlc.ListPullRequestsParams) ([]sqlc.ListPullRequestsRow, error)
+	CountPullRequestsFunc func(ctx context.Context, arg sqlc.CountPullRequestsParams) (int32, error)
 	// New method for getting team members
-	GetTeamMembersFunc                   func(ctx context.Context, team string) ([]sqlc.GetTeamMembersRow, error)
+	GetTeamMembersFunc func(ctx context.Context, team string) ([]sqlc.GetTeamMembersRow, error)
 	// New method for diagnosing lead times
-	DiagnoseLeadTimesFunc                func(ctx context.Context) ([]sqlc.DiagnoseLeadTimesRow, error)
+	DiagnoseLeadTimesFunc func(ctx context.Context) ([]sqlc.DiagnoseLeadTimesRow, error)
 	// New method for PR time data
 	GetPullRequestTimeDataForStatsFunc func(ctx context.Context, arg sqlc.GetPullRequestTimeDataForStatsParams) ([]sqlc.GetPullRequestTimeDataForStatsRow, error)
 	// New method for team member review stats
 	GetTeamMemberReviewStatsByDateRangeFunc func(ctx context.Context, arg sqlc.GetTeamMemberReviewStatsByDateRangeParams) ([]sqlc.GetTeamMemberReviewStatsByDateRangeRow, error)
 
 	// Add fields to track calls if needed
-	SaveTeamsCalled                      bool
-	GetLastPRDateCalledWith              [][2]string // Store org/repo pairs
-	SavePullRequestCalled                bool
-	FetchSecurityPullRequestsCalled      bool
-	CloseCalled                          bool
-	CountTeamCommitsByDateRangeCalled    bool
-	GetTeamPullRequestStatsByDateRangeCalled bool
-	ListPullRequestsCalled               bool
-	CountPullRequestsCalled              bool
-	GetTeamMembersCalled                 bool
-	DiagnoseLeadTimesCalled              bool
-	GetPullRequestTimeDataForStatsCalled bool
+	SaveTeamsCalled                           bool
+	GetLastPRDateCalledWith                   [][2]string // Store org/repo pairs
+	SavePullRequestCalled                     bool
+	FetchSecurityPullRequestsCalled           bool
+	CloseCalled                               bool
+	CountTeamCommitsByDateRangeCalled         bool
+	GetTeamPullRequestStatsByDateRangeCalled  bool
+	ListPullRequestsCalled                    bool
+	CountPullRequestsCalled                   bool
+	GetTeamMembersCalled                      bool
+	DiagnoseLeadTimesCalled                   bool
+	GetPullRequestTimeDataForStatsCalled      bool
 	GetTeamMemberReviewStatsByDateRangeCalled bool
 }
 
@@ -117,7 +117,7 @@ func (m *MockStore) GetRepos(ctx context.Context, page int, search string) ([]sq
 	return nil, 0, nil
 }
 func (m *MockStore) SaveRepos(ctx context.Context, repos []repositories.Repository) error { return nil }
-func (m *MockStore) GetAllRepos(ctx context.Context) ([]sqlc.Repository, error)         { return nil, nil }
+func (m *MockStore) GetAllRepos(ctx context.Context) ([]sqlc.Repository, error)           { return nil, nil }
 func (m *MockStore) SearchDistinctTeamNamesByPrefix(ctx context.Context, prefix string) ([]string, error) {
 	return nil, nil
 }
@@ -193,10 +193,42 @@ func (m *MockStore) GetTeamMemberReviewStatsByDateRange(ctx context.Context, arg
 	return []sqlc.GetTeamMemberReviewStatsByDateRangeRow{}, nil // Default mock behavior
 }
 
+// Implement Jira reference methods for MockStore
+func (m *MockStore) CountPullRequestsWithJiraReferences(ctx context.Context, arg sqlc.CountPullRequestsWithJiraReferencesParams) (int64, error) {
+	return 0, nil
+}
+
+func (m *MockStore) CountPullRequestsWithoutJiraReferences(ctx context.Context, arg sqlc.CountPullRequestsWithoutJiraReferencesParams) (int64, error) {
+	return 0, nil
+}
+
+func (m *MockStore) ListPullRequestsWithJiraReferences(ctx context.Context, arg sqlc.ListPullRequestsWithJiraReferencesParams) ([]sqlc.ListPullRequestsWithJiraReferencesRow, error) {
+	return []sqlc.ListPullRequestsWithJiraReferencesRow{}, nil
+}
+
+func (m *MockStore) ListPullRequestsWithoutJiraReferencesWithPagination(ctx context.Context, arg sqlc.ListPullRequestsWithoutJiraReferencesParamsWithPagination) ([]sqlc.ListPullRequestsWithoutJiraReferencesRow, error) {
+	return []sqlc.ListPullRequestsWithoutJiraReferencesRow{}, nil
+}
+
+// Implement User methods for MockStore
+func (m *MockStore) GetUserByUsername(ctx context.Context, username string) (sqlc.User, error) {
+	return sqlc.User{}, nil
+}
+
+// Implement SonarQube methods for MockStore
+func (m *MockStore) SaveSonarQubeProject(ctx context.Context, projectKey, projectName string) error {
+	return nil
+}
+
+func (m *MockStore) SaveSonarQubeMetrics(ctx context.Context, projectKey string, metrics map[string]float64, recordedAt time.Time) error {
+	return nil
+}
+
 // Mock function types for GitHub interactions
 // Updated MockGetTeamsFunc signature
 type MockGetTeamsFunc func(ghClient client.GitHubV4Client) (map[string][]organizations.MemberInfo, error)
 type MockGetReposFunc func(ghClient client.GitHubV4Client) ([]repositories.Repository, error)
+
 // Updated MockGetPullRequestsFunc signature to match cronjob.go
 type MockGetPullRequestsFunc func(ghClient client.GitHubV4Client, org string, repo string, since time.Time, l *slog.Logger) ([]pullrequests.PullRequest, error)
 
@@ -209,7 +241,7 @@ type MockSendMessageFunc func(prs []store.SecurityPR)
 func TestAppRun_Success(t *testing.T) {
 	// Setup: Create mocks
 	mockDB := &MockStore{}
-	mockGHClient := &MockGitHubClient{} // Use the new mock client
+	mockGHClient := &MockGitHubClient{}                          // Use the new mock client
 	testLogger := slog.New(slog.NewJSONHandler(io.Discard, nil)) // Discard logs during test
 
 	// Mock data - Updated testTeams to use MemberInfo
@@ -217,7 +249,7 @@ func TestAppRun_Success(t *testing.T) {
 		"team-a": {{Login: "member1", AvatarUrl: "url1"}},
 	}
 	testRepo := repositories.Repository{
-		Name: "repo1",
+		Name:  "repo1",
 		Owner: struct{ Login ghTypes.String }{Login: "org1"},
 	}
 	testRepos := []repositories.Repository{testRepo}
@@ -266,7 +298,7 @@ func TestAppRun_Success(t *testing.T) {
 	}
 	mockSendMessageImpl := func(prs []store.SecurityPR) {
 		sendMessageCalled = true // Mark as called
-		capturedSecPRs = prs    // Capture arguments
+		capturedSecPRs = prs     // Capture arguments
 	}
 
 	// Create App instance with mocks
