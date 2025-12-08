@@ -621,3 +621,60 @@ func (p *Postgres) ListPullRequestsWithoutJiraReferencesWithPagination(ctx conte
 	}
 	return prs, nil
 }
+
+// SaveSonarQubeProject saves or updates a SonarQube project
+func (p *Postgres) SaveSonarQubeProject(ctx context.Context, projectKey, projectName string) error {
+	query := `
+		INSERT INTO sonarqube_projects (project_key, project_name, updated_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (project_key)
+		DO UPDATE SET
+			project_name = EXCLUDED.project_name,
+			updated_at = NOW()
+	`
+
+	_, err := p.connPool.Exec(ctx, query, projectKey, projectName)
+	if err != nil {
+		p.Logger.Error("Failed to save SonarQube project", "project_key", projectKey, "error", err)
+		return err
+	}
+
+	return nil
+}
+
+// SaveSonarQubeMetrics saves metrics for a project
+func (p *Postgres) SaveSonarQubeMetrics(ctx context.Context, projectKey string, metrics map[string]float64, recordedAt time.Time) error {
+	// Start a transaction
+	tx, err := p.connPool.Begin(ctx)
+	if err != nil {
+		p.Logger.Error("Failed to begin transaction", "error", err)
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	query := `
+		INSERT INTO sonarqube_metrics (project_key, metric_key, metric_value, recorded_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (project_key, metric_key, recorded_at)
+		DO UPDATE SET metric_value = EXCLUDED.metric_value
+	`
+
+	for metricKey, metricValue := range metrics {
+		_, err := tx.Exec(ctx, query, projectKey, metricKey, metricValue, recordedAt)
+		if err != nil {
+			p.Logger.Error("Failed to save metric",
+				"project_key", projectKey,
+				"metric_key", metricKey,
+				"error", err,
+			)
+			return err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		p.Logger.Error("Failed to commit transaction", "error", err)
+		return err
+	}
+
+	return nil
+}

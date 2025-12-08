@@ -109,6 +109,14 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	a.log.Info("Repositories fetched.", "count", len(repos))
 
+	// Save repositories to database
+	if err = a.db.SaveRepos(ctx, repos); err != nil {
+		a.log.Error("Failed to save repositories to DB", "error", err)
+		// Continue even if saving fails, we still need to process PRs
+	} else {
+		a.log.Info("Repositories saved to database.", "count", len(repos))
+	}
+
 	// Fetch and save pull requests for each repository
 	max := len(repos)
 	for i, repo := range repos {
@@ -217,10 +225,10 @@ func main() {
 		l,
 		db,
 		ghClient,
-		organizations.GetTeams,    // Real function
-		repositories.Get,          // Real function
-		pullrequests.Get,          // Real function
-		slack.SendMessage,         // Real function
+		organizations.GetTeams, // Real function
+		repositories.Get,       // Real function
+		pullrequests.Get,       // Real function
+		slack.SendMessage,      // Real function
 	)
 
 	if err := app.Run(ctx); err != nil {

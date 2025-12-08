@@ -70,6 +70,10 @@ type Store interface {
 
 	// User methods
 	GetUserByUsername(ctx context.Context, username string) (sqlc.User, error)
+
+	// SonarQube methods
+	SaveSonarQubeProject(ctx context.Context, projectKey, projectName string) error
+	SaveSonarQubeMetrics(ctx context.Context, projectKey string, metrics map[string]float64, recordedAt time.Time) error
 	// Removed duplicate Close()
 }
 

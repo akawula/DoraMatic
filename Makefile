@@ -4,6 +4,7 @@ DOCKER_IMAGE_BASE_NAME?=doramatic
 DOCKER_IMAGE_CRON=${DOCKER_REGISTRY_USER}/${DOCKER_IMAGE_BASE_NAME}:cron
 DOCKER_IMAGE_API=${DOCKER_REGISTRY_USER}/${DOCKER_IMAGE_BASE_NAME}:api
 DOCKER_IMAGE_FRONTEND=${DOCKER_REGISTRY_USER}/${DOCKER_IMAGE_BASE_NAME}:frontend
+DOCKER_IMAGE_SONARQUBE=${DOCKER_REGISTRY_USER}/${DOCKER_IMAGE_BASE_NAME}:sonarqube
 
 PLATFORM?=linux/arm64
 
@@ -20,13 +21,22 @@ build-cron: ## Build the cron job application
 build-server: ## Build the server application
 	GOARCH=amd64 GOOS=darwin go build -o app/server cmd/server/server.go
 
-build: build-cron build-server ## Build both cron and server applications
+build-sonarqube: ## Build the SonarQube metrics CLI
+	GOARCH=amd64 GOOS=darwin go build -o bin/sonarqube cmd/sonarqube/sonarqube.go
+
+build-sonarqube-sync: ## Build the SonarQube sync cronjob
+	GOARCH=amd64 GOOS=darwin go build -o app/sonarqube-sync cmd/sonarqube-sync/sonarqube-sync.go
+
+build: build-cron build-server build-sonarqube build-sonarqube-sync ## Build all applications
 
 run-cron: clean build-cron ## Clean and run the cron job locally
 	DEBUG=1 ./app/cron
 
 run-server: clean build-server ## Clean and run the server locally
 	DEBUG=1 ./app/server
+
+run-sonarqube: build-sonarqube ## Run SonarQube metrics aggregator
+	./bin/sonarqube
 
 run-frontend: ## Run the frontend development server
 	cd frontend && npm start
@@ -78,7 +88,11 @@ build-push-frontend: ## Build and push the frontend Docker image
 	@echo "Building and pushing frontend image: ${DOCKER_IMAGE_FRONTEND} for platform ${PLATFORM} (no-cache)..."
 	docker buildx build --no-cache --platform=${PLATFORM} -f frontend/Dockerfile -t ${DOCKER_IMAGE_FRONTEND} ./frontend --push
 
-build-push-all: build-push-cron build-push-api build-push-frontend ## Build and push all Docker images
+build-push-sonarqube: ## Build and push the SonarQube sync Docker image
+	@echo "Building and pushing SonarQube image: ${DOCKER_IMAGE_SONARQUBE} for platform ${PLATFORM} (no-cache)..."
+	docker buildx build --no-cache --platform=${PLATFORM} -f Dockerfile.sonarqube -t ${DOCKER_IMAGE_SONARQUBE} . --push
+
+build-push-all: build-push-cron build-push-api build-push-frontend build-push-sonarqube ## Build and push all Docker images
 	@echo "All images built and pushed."
 
 # Kubernetes deployment targets
