@@ -92,7 +92,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total PRs (Selected Period)",
+      "title": "Total PRs",
+      "description": "Total number of pull requests created by team members in the selected time period",
       "type": "stat"
     },
     {
@@ -167,7 +168,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total Merged PRs (Selected Period)",
+      "title": "Merged PRs",
+      "description": "Total number of pull requests successfully merged in the selected time period",
       "type": "stat"
     },
     {
@@ -189,15 +191,15 @@
               },
               {
                 "color": "yellow",
-                "value": 3600
-              },
-              {
-                "color": "orange",
                 "value": 86400
               },
               {
-                "color": "red",
+                "color": "orange",
                 "value": 259200
+              },
+              {
+                "color": "red",
+                "value": 604800
               }
             ]
           },
@@ -220,7 +222,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -238,11 +240,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.merged_at) as time,\n  AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))) as \"Average Lead Time (seconds)\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))) as \"Average Lead Time (seconds)\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Lead Time (Selected Period)",
+      "title": "Avg Lead Time",
+      "description": "Average time from PR creation to merge. Key DORA metric - shorter is better. Green <1 day, Yellow 1-3 days, Orange 3-7 days, Red >7 days",
       "type": "stat"
     },
     {
@@ -305,7 +308,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total Additions (Selected Period)",
+      "title": "Lines Added",
+      "description": "Total lines of code added across all PRs in the selected period",
       "type": "stat"
     },
     {
@@ -368,7 +372,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total Deletions (Selected Period)",
+      "title": "Lines Removed",
+      "description": "Total lines of code removed across all PRs in the selected period. High deletions often indicate healthy refactoring",
       "type": "stat"
     },
     {
@@ -426,7 +431,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -444,11 +449,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  COUNT(*) as \"Average PRs Created per Day\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  COUNT(*)::float / NULLIF(DATE_PART('day', $__timeTo()::timestamp - $__timeFrom()::timestamp), 0) as \"PRs per Day\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Daily PRs Created",
+      "title": "PRs Created/Day",
+      "description": "Average number of pull requests created per day. Indicates team throughput and coding velocity",
       "type": "stat"
     },
     {
@@ -506,7 +512,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -524,11 +530,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.merged_at) as time,\n  COUNT(*) as \"Average PRs Merged per Day\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  COUNT(*)::float / NULLIF(DATE_PART('day', $__timeTo()::timestamp - $__timeFrom()::timestamp), 0) as \"PRs per Day\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Daily PRs Merged",
+      "title": "PRs Merged/Day",
+      "description": "Average number of pull requests merged per day. Indicates delivery throughput",
       "type": "stat"
     },
     {
@@ -581,7 +588,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -599,11 +606,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  AVG(pr.additions + pr.deletions) as \"Average PR Size (lines)\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(pr.additions + pr.deletions) as \"Average PR Size (lines)\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg PR Size (Lines Changed)",
+      "title": "Avg PR Size",
+      "description": "Average lines changed per PR (additions + deletions). Smaller PRs (<200 lines) are easier to review and less risky",
       "type": "stat"
     },
     {
@@ -656,7 +664,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -674,11 +682,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  AVG(EXTRACT(EPOCH FROM (COALESCE(pr.review_requested_at, pr.created_at) - pr.created_at))) as \"Coding Time\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(EXTRACT(EPOCH FROM (pr.review_requested_at - pr.created_at))) as \"Coding Time\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.review_requested_at IS NOT NULL\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Time to Request Review (Coding time)",
+      "title": "Coding Time",
+      "description": "Average time from PR creation to review request. Represents active development time before seeking feedback",
       "type": "stat"
     },
     {
@@ -731,7 +740,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -749,11 +758,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  AVG(EXTRACT(EPOCH FROM (first_review.submitted_at - COALESCE(pr.review_requested_at, pr.created_at)))) as \"Review Wait Time\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nJOIN LATERAL (\n  SELECT MIN(submitted_at) as submitted_at\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) first_review ON true\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND first_review.submitted_at IS NOT NULL\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(EXTRACT(EPOCH FROM (first_review.submitted_at - COALESCE(pr.review_requested_at, pr.created_at)))) as \"Review Wait Time\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nJOIN LATERAL (\n  SELECT MIN(submitted_at) as submitted_at\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) first_review ON true\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND first_review.submitted_at IS NOT NULL\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Time to First Review (Review Wait Time)",
+      "title": "Review Wait Time",
+      "description": "Average time waiting for first review after requesting. Long wait times indicate review bottlenecks",
       "type": "stat"
     },
     {
@@ -803,7 +813,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -821,11 +831,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  AVG(review_count) as \"Avg Reviews\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nJOIN LATERAL (\n  SELECT COUNT(DISTINCT author_login) as review_count\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) reviews ON true\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(review_count) as \"Avg Reviews\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nJOIN LATERAL (\n  SELECT COUNT(DISTINCT author_login) as review_count\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) reviews ON true\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Reviews per PR (number of distinct reviewers)",
+      "title": "Reviews per PR",
+      "description": "Average number of distinct reviewers per PR. More reviewers = better knowledge sharing but potentially slower merge",
       "type": "stat"
     },
     {
@@ -878,7 +889,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -896,11 +907,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.merged_at) as time,\n  AVG(EXTRACT(EPOCH FROM (pr.merged_at - first_review.submitted_at))) as \"Review to Merge Time\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nJOIN LATERAL (\n  SELECT MIN(submitted_at) as submitted_at\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) first_review ON true\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.state = 'MERGED'\n  AND first_review.submitted_at IS NOT NULL\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(EXTRACT(EPOCH FROM (pr.merged_at - first_review.submitted_at))) as \"Review to Merge Time\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nJOIN LATERAL (\n  SELECT MIN(submitted_at) as submitted_at\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) first_review ON true\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.state = 'MERGED'\n  AND first_review.submitted_at IS NOT NULL\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Review to Merge Time (Approval/Rework Time)",
+      "title": "Review to Merge",
+      "description": "Average time from first review to merge. Includes rework cycles and approval delays",
       "type": "stat"
     },
     {
@@ -975,7 +987,283 @@
           "refId": "A"
         }
       ],
-      "title": "Team Member Count",
+      "title": "Team Size",
+      "description": "Number of team members included in this dashboard view",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 50,
+      "panels": [],
+      "title": "Process Health Indicators",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 60 },
+              { "color": "yellow", "value": 80 },
+              { "color": "green", "value": 95 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 10 },
+      "id": 51,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ROUND((100.0 * COUNT(*) FILTER (WHERE state = 'MERGED') / NULLIF(COUNT(*), 0))::numeric, 1) as value\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp;",
+          "refId": "A"
+        }
+      ],
+      "title": "Merge Rate",
+      "description": "Percentage of PRs that were merged (vs closed/abandoned)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 70 },
+              { "color": "yellow", "value": 90 },
+              { "color": "green", "value": 98 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 10 },
+      "id": 52,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH merged_prs AS (\n  SELECT pr.id\n  FROM prs pr\n  JOIN teams t ON pr.author = t.member\n  WHERE t.team = '$team'\n    AND pr.author IN ($included_members)\n    AND pr.state = 'MERGED'\n    AND pr.merged_at >= $__timeFrom()::timestamp\n    AND pr.merged_at <= $__timeTo()::timestamp\n),\nreviewed_prs AS (\n  SELECT DISTINCT mp.id\n  FROM merged_prs mp\n  JOIN pull_request_reviews r ON r.pull_request_id = mp.id\n)\nSELECT ROUND((100.0 * COUNT(rp.id) / NULLIF(COUNT(mp.id), 0))::numeric, 1) as value\nFROM merged_prs mp\nLEFT JOIN reviewed_prs rp ON mp.id = rp.id;",
+          "refId": "A"
+        }
+      ],
+      "title": "Review Coverage",
+      "description": "Percentage of merged PRs that received at least one review",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "orange", "value": 15 },
+              { "color": "red", "value": 30 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 10 },
+      "id": 53,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH merged_prs AS (\n  SELECT pr.id, pr.author\n  FROM prs pr\n  JOIN teams t ON pr.author = t.member\n  WHERE t.team = '$team'\n    AND pr.author IN ($included_members)\n    AND pr.state = 'MERGED'\n    AND pr.merged_at >= $__timeFrom()::timestamp\n    AND pr.merged_at <= $__timeTo()::timestamp\n),\nself_merged AS (\n  SELECT mp.id\n  FROM merged_prs mp\n  WHERE NOT EXISTS (\n    SELECT 1 FROM pull_request_reviews r\n    WHERE r.pull_request_id = mp.id\n      AND r.author_login != mp.author\n      AND r.state IN ('APPROVED', 'CHANGES_REQUESTED')\n  )\n)\nSELECT ROUND((100.0 * COUNT(sm.id) / NULLIF(COUNT(mp.id), 0))::numeric, 1) as value\nFROM merged_prs mp\nLEFT JOIN self_merged sm ON mp.id = sm.id;",
+          "refId": "A"
+        }
+      ],
+      "title": "Self-Merge Rate",
+      "description": "Percentage of merged PRs without external review (potential risk)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "orange", "value": 40 },
+              { "color": "red", "value": 60 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 10 },
+      "id": 54,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH team_prs AS (\n  SELECT pr.id\n  FROM prs pr\n  JOIN teams t ON pr.author = t.member\n  WHERE t.team = '$team'\n    AND pr.author IN ($included_members)\n    AND pr.created_at >= $__timeFrom()::timestamp\n    AND pr.created_at <= $__timeTo()::timestamp\n),\nprs_with_changes_requested AS (\n  SELECT DISTINCT tp.id\n  FROM team_prs tp\n  JOIN pull_request_reviews r ON r.pull_request_id = tp.id\n  WHERE r.state = 'CHANGES_REQUESTED'\n)\nSELECT ROUND((100.0 * COUNT(pcr.id) / NULLIF(COUNT(tp.id), 0))::numeric, 1) as value\nFROM team_prs tp\nLEFT JOIN prs_with_changes_requested pcr ON tp.id = pcr.id;",
+          "refId": "A"
+        }
+      ],
+      "title": "Rework Rate",
+      "description": "Percentage of PRs that received 'Changes Requested' reviews",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "orange", "value": 10 },
+              { "color": "red", "value": 20 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 10 },
+      "id": 55,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) as value\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.state = 'OPEN'\n  AND pr.created_at < NOW() - INTERVAL '7 days';",
+          "refId": "A"
+        }
+      ],
+      "title": "Stale PRs (>7 days)",
+      "description": "Open PRs older than 7 days that need attention",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 0.7 },
+              { "color": "yellow", "value": 0.9 },
+              { "color": "green", "value": 1.0 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 10 },
+      "id": 56,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ROUND((COUNT(*) FILTER (WHERE state = 'MERGED')::float / NULLIF(COUNT(*), 0))::numeric, 2) as value\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp;",
+          "refId": "A"
+        }
+      ],
+      "title": "Flow Ratio",
+      "description": "Merged/Created ratio - below 1.0 means backlog is growing",
       "type": "stat"
     },
     {
@@ -1230,7 +1518,8 @@
           "refId": "D"
         }
       ],
-      "title": "Daily Pull Requests Over Time",
+      "title": "PR Activity Over Time",
+      "description": "Daily PR creation and merge activity. Compare trends to identify delivery patterns and bottlenecks",
       "type": "timeseries"
     },
     {
@@ -1566,11 +1855,12 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, SUM(pr.additions + pr.deletions) DESC) as \"#\",\n  t.member as \"Author\",\n  COUNT(*) as \"PRs\",\n  SUM(pr.additions) as \"Total Additions\",\n  SUM(pr.deletions) as \"Total Deletions\",\n  SUM(pr.additions + pr.deletions) as \"Total Changes\",\n  ROUND(AVG(pr.additions + pr.deletions)) as \"Avg Changes\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) <= 100 THEN 1 END) as \"Small\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 100 AND (pr.additions + pr.deletions) <= 500 THEN 1 END) as \"Medium\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 500 THEN 1 END) as \"Large\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY t.member\nORDER BY \"PRs\" DESC, \"Total Changes\" DESC",
+          "rawSql": "SELECT\n  ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, SUM(pr.additions + pr.deletions) DESC) as \"#\",\n  t.member as \"Author\",\n  COUNT(*) as \"PRs\",\n  SUM(pr.additions) as \"Total Additions\",\n  SUM(pr.deletions) as \"Total Deletions\",\n  SUM(pr.additions + pr.deletions) as \"Total Changes\",\n  ROUND(AVG(pr.additions + pr.deletions)::numeric) as \"Avg Changes\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) <= 100 THEN 1 END) as \"Small\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 100 AND (pr.additions + pr.deletions) <= 500 THEN 1 END) as \"Medium\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 500 THEN 1 END) as \"Large\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY t.member\nORDER BY \"PRs\" DESC, \"Total Changes\" DESC",
           "refId": "A"
         }
       ],
-      "title": "Author Code Change Statistics (Selected Period)",
+      "title": "Author Statistics",
+      "description": "Individual contributor metrics showing PR volume, code changes, and PR size distribution (Small <100, Medium 100-500, Large >500 lines)",
       "type": "table"
     },
     {
@@ -1677,11 +1967,12 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH repo_metrics AS (\n  SELECT\n    pr.repository_name as \"Repository\",\n    COUNT(*) as \"PRs\",\n    ROUND(AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) / 86400)::numeric, 1) as \"Avg Lead Time (days)\",\n    ROUND(AVG(pr.additions + pr.deletions)) as \"Avg PR Size\",\n    COUNT(CASE WHEN pr.state = 'MERGED' THEN 1 END) as \"Merged PRs\"\n  FROM prs pr\n  JOIN teams t ON pr.author = t.member\n  WHERE t.team = '$team'\n    AND pr.author IN ($included_members)\n    AND pr.created_at >= $__timeFrom()::timestamp\n    AND pr.created_at <= $__timeTo()::timestamp\n    AND pr.state = 'MERGED'\n  GROUP BY pr.repository_name\n)\nSELECT *\nFROM repo_metrics\nWHERE \"Avg Lead Time (days)\" > 3 OR \"Avg PR Size\" > 500\nORDER BY \"Avg Lead Time (days)\" DESC NULLS LAST, \"Avg PR Size\" DESC",
+          "rawSql": "WITH repo_metrics AS (\n  SELECT\n    pr.repository_name as \"Repository\",\n    COUNT(*) as \"PRs\",\n    ROUND((AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))) / 86400)::numeric, 1) as \"Avg Lead Time (days)\",\n    ROUND(AVG(pr.additions + pr.deletions)::numeric) as \"Avg PR Size\",\n    COUNT(CASE WHEN pr.state = 'MERGED' THEN 1 END) as \"Merged PRs\"\n  FROM prs pr\n  JOIN teams t ON pr.author = t.member\n  WHERE t.team = '$team'\n    AND pr.author IN ($included_members)\n    AND pr.created_at >= $__timeFrom()::timestamp\n    AND pr.created_at <= $__timeTo()::timestamp\n    AND pr.state = 'MERGED'\n  GROUP BY pr.repository_name\n)\nSELECT *\nFROM repo_metrics\nWHERE \"Avg Lead Time (days)\" > 3 OR \"Avg PR Size\" > 500\nORDER BY \"Avg Lead Time (days)\" DESC NULLS LAST, \"Avg PR Size\" DESC",
           "refId": "A"
         }
       ],
-      "title": "Problematic Repositories (High Lead Time or Large PRs)",
+      "title": "Repositories Needing Attention",
+      "description": "Repositories with lead time >3 days or average PR size >500 lines. These may need process improvements",
       "type": "table"
     },
     {
@@ -1750,7 +2041,8 @@
           "refId": "A"
         }
       ],
-      "title": "Programming Languages (by Repository Count)",
+      "title": "Languages by Repository",
+      "description": "Distribution of programming languages across active repositories touched by the team",
       "transformations": [],
       "type": "piechart"
     },
@@ -1820,9 +2112,66 @@
           "refId": "A"
         }
       ],
-      "title": "Programming Languages (by PR Count)",
+      "title": "Languages by PR Volume",
+      "description": "Distribution of programming languages by number of PRs. Shows where most development effort is focused",
       "transformations": [],
       "type": "piechart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 66 },
+      "id": 60,
+      "panels": [],
+      "title": "Reviewer Workload & Performance",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Reviews" }, "properties": [
+            { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+            { "id": "color", "value": { "mode": "continuous-BlPu" } }
+          ]},
+          { "matcher": { "id": "byName", "options": "Avg Response Time" }, "properties": [
+            { "id": "unit", "value": "s" },
+            { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+            { "id": "color", "value": { "mode": "continuous-RdYlGr", "reverse": true } }
+          ]},
+          { "matcher": { "id": "byName", "options": "Approval Rate" }, "properties": [
+            { "id": "unit", "value": "percent" },
+            { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+            { "id": "color", "value": { "mode": "continuous-GrYlRd", "reverse": true } }
+          ]}
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 67 },
+      "id": 61,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Reviews" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH team_member_reviews AS (\n  SELECT \n    r.author_login as \"Reviewer\",\n    COUNT(*) as \"Reviews\",\n    COUNT(DISTINCT r.pull_request_id) as \"PRs Reviewed\",\n    COUNT(*) FILTER (WHERE r.state = 'APPROVED') as \"Approvals\",\n    COUNT(*) FILTER (WHERE r.state = 'CHANGES_REQUESTED') as \"Changes Requested\",\n    COUNT(*) FILTER (WHERE r.state = 'COMMENTED') as \"Comments Only\",\n    ROUND((100.0 * COUNT(*) FILTER (WHERE r.state = 'APPROVED') / NULLIF(COUNT(*), 0))::numeric, 1) as \"Approval Rate\",\n    ROUND(AVG(EXTRACT(EPOCH FROM (r.submitted_at - pr.created_at)))::numeric) as \"Avg Response Time\"\n  FROM pull_request_reviews r\n  JOIN prs pr ON r.pull_request_id = pr.id\n  JOIN teams t ON r.author_login = t.member\n  WHERE t.team = '$team'\n    AND r.author_login IN ($included_members)\n    AND r.submitted_at >= $__timeFrom()::timestamp\n    AND r.submitted_at <= $__timeTo()::timestamp\n  GROUP BY r.author_login\n)\nSELECT * FROM team_member_reviews\nORDER BY \"Reviews\" DESC;",
+          "refId": "A"
+        }
+      ],
+      "title": "Reviewer Workload (Selected Period)",
+      "description": "Shows who is doing reviews, their approval rate, and response time",
+      "type": "table"
     }
   ],
   "preload": false,
