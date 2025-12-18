@@ -2172,6 +2172,230 @@
       "title": "Reviewer Workload (Selected Period)",
       "description": "Shows who is doing reviews, their approval rate, and response time",
       "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 77 },
+      "id": 70,
+      "panels": [],
+      "title": "Foreign Repository Metrics",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "orange", "value": 10 },
+              { "color": "red", "value": 20 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 78 },
+      "id": 71,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH team_members AS (\n  SELECT DISTINCT member, github_team_slug\n  FROM teams\n  WHERE team = '$team'\n    AND member IN ($included_members)\n    AND github_team_slug IS NOT NULL\n)\nSELECT COUNT(*) as value\nFROM prs pr\nJOIN team_members tm ON pr.author = tm.member\nWHERE pr.state = 'OPEN'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\n  AND NOT EXISTS (\n    SELECT 1 FROM repository_owners ro\n    WHERE ro.org = pr.repository_owner\n      AND ro.repo_slug = pr.repository_name\n      AND ro.team_slug = tm.github_team_slug\n  );",
+          "refId": "A"
+        }
+      ],
+      "title": "Open Foreign PRs",
+      "description": "PRs in repositories not owned by the team (based on CODEOWNERS)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 86400 },
+              { "color": "orange", "value": 259200 },
+              { "color": "red", "value": 604800 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 78 },
+      "id": 72,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH team_members AS (\n  SELECT DISTINCT member, github_team_slug\n  FROM teams\n  WHERE team = '$team'\n    AND member IN ($included_members)\n    AND github_team_slug IS NOT NULL\n)\nSELECT AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))) as value\nFROM prs pr\nJOIN team_members tm ON pr.author = tm.member\nWHERE pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp\n  AND NOT EXISTS (\n    SELECT 1 FROM repository_owners ro\n    WHERE ro.org = pr.repository_owner\n      AND ro.repo_slug = pr.repository_name\n      AND ro.team_slug = tm.github_team_slug\n  );",
+          "refId": "A"
+        }
+      ],
+      "title": "Foreign PR Lead Time",
+      "description": "Average lead time for PRs in foreign repositories",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "orange", "value": 40 },
+              { "color": "red", "value": 60 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 78 },
+      "id": 73,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH team_members AS (\n  SELECT DISTINCT member, github_team_slug\n  FROM teams\n  WHERE team = '$team'\n    AND member IN ($included_members)\n    AND github_team_slug IS NOT NULL\n),\nall_prs AS (\n  SELECT pr.id, tm.github_team_slug, pr.repository_owner, pr.repository_name\n  FROM prs pr\n  JOIN team_members tm ON pr.author = tm.member\n  WHERE pr.created_at >= $__timeFrom()::timestamp\n    AND pr.created_at <= $__timeTo()::timestamp\n),\nforeign_prs AS (\n  SELECT ap.id\n  FROM all_prs ap\n  WHERE NOT EXISTS (\n    SELECT 1 FROM repository_owners ro\n    WHERE ro.org = ap.repository_owner\n      AND ro.repo_slug = ap.repository_name\n      AND ro.team_slug = ap.github_team_slug\n  )\n)\nSELECT ROUND((100.0 * COUNT(fp.id) / NULLIF(COUNT(ap.id), 0))::numeric, 1) as value\nFROM all_prs ap\nLEFT JOIN foreign_prs fp ON ap.id = fp.id;",
+          "refId": "A"
+        }
+      ],
+      "title": "Foreign PR %",
+      "description": "Percentage of team PRs that are in foreign repositories",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 14400 },
+              { "color": "orange", "value": 28800 },
+              { "color": "red", "value": 86400 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 78 },
+      "id": 74,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH team_members AS (\n  SELECT DISTINCT member, github_team_slug\n  FROM teams\n  WHERE team = '$team'\n    AND member IN ($included_members)\n    AND github_team_slug IS NOT NULL\n)\nSELECT AVG(EXTRACT(EPOCH FROM (first_review.submitted_at - COALESCE(pr.review_requested_at, pr.created_at)))) as value\nFROM prs pr\nJOIN team_members tm ON pr.author = tm.member\nJOIN LATERAL (\n  SELECT MIN(submitted_at) as submitted_at\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) first_review ON true\nWHERE first_review.submitted_at IS NOT NULL\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\n  AND NOT EXISTS (\n    SELECT 1 FROM repository_owners ro\n    WHERE ro.org = pr.repository_owner\n      AND ro.repo_slug = pr.repository_name\n      AND ro.team_slug = tm.github_team_slug\n  );",
+          "refId": "A"
+        }
+      ],
+      "title": "Foreign Review Wait",
+      "description": "Average wait time for first review on foreign PRs",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Age (days)" }, "properties": [
+            { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+            { "id": "color", "value": { "mode": "continuous-RdYlGr", "reverse": true } },
+            { "id": "decimals", "value": 1 }
+          ]},
+          { "matcher": { "id": "byName", "options": "Title" }, "properties": [
+            { "id": "custom.width", "value": 350 }
+          ]}
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 82 },
+      "id": 75,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Age (days)" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH team_members AS (\n  SELECT DISTINCT member, github_team_slug\n  FROM teams\n  WHERE team = '$team'\n    AND member IN ($included_members)\n    AND github_team_slug IS NOT NULL\n)\nSELECT\n  pr.title as \"Title\",\n  pr.author as \"Author\",\n  pr.repository_owner || '/' || pr.repository_name as \"Repository\",\n  pr.state as \"State\",\n  ROUND(EXTRACT(EPOCH FROM (NOW() - pr.created_at)) / 86400, 1) as \"Age (days)\",\n  pr.created_at as \"Created\",\n  pr.url as \"URL\"\nFROM prs pr\nJOIN team_members tm ON pr.author = tm.member\nWHERE pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\n  AND NOT EXISTS (\n    SELECT 1 FROM repository_owners ro\n    WHERE ro.org = pr.repository_owner\n      AND ro.repo_slug = pr.repository_name\n      AND ro.team_slug = tm.github_team_slug\n  )\nORDER BY pr.created_at DESC\nLIMIT 50;",
+          "refId": "A"
+        }
+      ],
+      "title": "Foreign PRs (Team working in other teams' repos)",
+      "description": "PRs by team members in repositories not owned by the team according to CODEOWNERS",
+      "type": "table"
     }
   ],
   "preload": false,
