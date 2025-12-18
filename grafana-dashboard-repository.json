@@ -92,7 +92,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total PRs (Selected Period)",
+      "title": "Total PRs",
+      "description": "Total number of pull requests created for this repository in the selected time period",
       "type": "stat"
     },
     {
@@ -167,7 +168,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total Merged PRs (Selected Period)",
+      "title": "Merged PRs",
+      "description": "Total number of pull requests successfully merged in the selected time period",
       "type": "stat"
     },
     {
@@ -189,15 +191,15 @@
               },
               {
                 "color": "yellow",
-                "value": 3600
-              },
-              {
-                "color": "orange",
                 "value": 86400
               },
               {
-                "color": "red",
+                "color": "orange",
                 "value": 259200
+              },
+              {
+                "color": "red",
+                "value": 604800
               }
             ]
           },
@@ -220,7 +222,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -238,11 +240,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.merged_at) as time,\n  AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))) as \"Average Lead Time (seconds)\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))) as \"Average Lead Time (seconds)\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Lead Time (Selected Period)",
+      "title": "Avg Lead Time",
+      "description": "Average time from PR creation to merge. Key DORA metric - shorter is better. Green <1 day, Yellow 1-3 days, Orange 3-7 days, Red >7 days",
       "type": "stat"
     },
     {
@@ -305,7 +308,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total Additions (Selected Period)",
+      "title": "Lines Added",
+      "description": "Total lines of code added across all PRs in the selected period",
       "type": "stat"
     },
     {
@@ -368,7 +372,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total Deletions (Selected Period)",
+      "title": "Lines Removed",
+      "description": "Total lines of code removed across all PRs in the selected period. High deletions often indicate healthy refactoring",
       "type": "stat"
     },
     {
@@ -426,7 +431,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -444,11 +449,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  COUNT(*) as \"Average PRs Created per Day\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  COUNT(*)::float / NULLIF(DATE_PART('day', $__timeTo()::timestamp - $__timeFrom()::timestamp), 0) as \"PRs per Day\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Daily PRs Created",
+      "title": "PRs Created/Day",
+      "description": "Average number of pull requests created per day. Indicates development activity level",
       "type": "stat"
     },
     {
@@ -506,7 +512,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -524,11 +530,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.merged_at) as time,\n  COUNT(*) as \"Average PRs Merged per Day\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  COUNT(*)::float / NULLIF(DATE_PART('day', $__timeTo()::timestamp - $__timeFrom()::timestamp), 0) as \"PRs per Day\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Daily PRs Merged",
+      "title": "PRs Merged/Day",
+      "description": "Average number of pull requests merged per day. Indicates delivery throughput for this repository",
       "type": "stat"
     },
     {
@@ -581,7 +588,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -599,11 +606,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  AVG(pr.additions + pr.deletions) as \"Average PR Size (lines)\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(pr.additions + pr.deletions) as \"Average PR Size (lines)\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg PR Size (Lines Changed)",
+      "title": "Avg PR Size",
+      "description": "Average lines changed per PR (additions + deletions). Smaller PRs (<200 lines) are easier to review and less risky",
       "type": "stat"
     },
     {
@@ -656,7 +664,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -674,11 +682,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  AVG(EXTRACT(EPOCH FROM (COALESCE(pr.review_requested_at, pr.created_at) - pr.created_at))) as \"Coding Time\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(EXTRACT(EPOCH FROM (pr.review_requested_at - pr.created_at))) as \"Coding Time\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.review_requested_at IS NOT NULL\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Time to Request Review (Coding time)",
+      "title": "Coding Time",
+      "description": "Average time from PR creation to review request. Represents active development time before seeking feedback",
       "type": "stat"
     },
     {
@@ -731,7 +740,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -749,11 +758,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  AVG(EXTRACT(EPOCH FROM (first_review.submitted_at - COALESCE(pr.review_requested_at, pr.created_at)))) as \"Review Wait Time\"\nFROM prs pr\nJOIN LATERAL (\n  SELECT MIN(submitted_at) as submitted_at\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) first_review ON true\nWHERE pr.repository_name = '$repository'\n  AND first_review.submitted_at IS NOT NULL\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(EXTRACT(EPOCH FROM (first_review.submitted_at - COALESCE(pr.review_requested_at, pr.created_at)))) as \"Review Wait Time\"\nFROM prs pr\nJOIN LATERAL (\n  SELECT MIN(submitted_at) as submitted_at\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) first_review ON true\nWHERE pr.repository_name = '$repository'\n  AND first_review.submitted_at IS NOT NULL\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Time to First Review (Review Wait Time)",
+      "title": "Review Wait Time",
+      "description": "Average time waiting for first review after requesting. Long wait times indicate review bottlenecks",
       "type": "stat"
     },
     {
@@ -803,7 +813,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -821,11 +831,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  AVG(review_count) as \"Avg Reviews\"\nFROM prs pr\nJOIN LATERAL (\n  SELECT COUNT(DISTINCT author_login) as review_count\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) reviews ON true\nWHERE pr.repository_name = '$repository'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(review_count) as \"Avg Reviews\"\nFROM prs pr\nJOIN LATERAL (\n  SELECT COUNT(DISTINCT author_login) as review_count\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) reviews ON true\nWHERE pr.repository_name = '$repository'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Reviews per PR (number of distinct reviewers)",
+      "title": "Reviews per PR",
+      "description": "Average number of distinct reviewers per PR. More reviewers = better knowledge sharing but potentially slower merge",
       "type": "stat"
     },
     {
@@ -878,7 +889,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -896,11 +907,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.merged_at) as time,\n  AVG(EXTRACT(EPOCH FROM (pr.merged_at - first_review.submitted_at))) as \"Review to Merge Time\"\nFROM prs pr\nJOIN LATERAL (\n  SELECT MIN(submitted_at) as submitted_at\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) first_review ON true\nWHERE pr.repository_name = '$repository'\n  AND pr.state = 'MERGED'\n  AND first_review.submitted_at IS NOT NULL\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(EXTRACT(EPOCH FROM (pr.merged_at - first_review.submitted_at))) as \"Review to Merge Time\"\nFROM prs pr\nJOIN LATERAL (\n  SELECT MIN(submitted_at) as submitted_at\n  FROM pull_request_reviews\n  WHERE pull_request_id = pr.id\n) first_review ON true\nWHERE pr.repository_name = '$repository'\n  AND pr.state = 'MERGED'\n  AND first_review.submitted_at IS NOT NULL\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Review to Merge Time (Approval/Rework Time)",
+      "title": "Review to Merge",
+      "description": "Average time from first review to merge. Includes rework cycles and approval delays",
       "type": "stat"
     },
     {
@@ -1213,7 +1225,8 @@
           "refId": "D"
         }
       ],
-      "title": "Daily Pull Requests Over Time",
+      "title": "PR Activity Over Time",
+      "description": "Daily PR creation and merge activity. Compare trends to identify delivery patterns and bottlenecks",
       "type": "timeseries"
     },
     {
@@ -1515,11 +1528,12 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, SUM(pr.additions + pr.deletions) DESC) as \"#\",\n  pr.author as \"Author\",\n  COUNT(*) as \"PRs\",\n  SUM(pr.additions) as \"Total Additions\",\n  SUM(pr.deletions) as \"Total Deletions\",\n  SUM(pr.additions + pr.deletions) as \"Total Changes\",\n  ROUND(AVG(pr.additions + pr.deletions)) as \"Avg Changes\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) <= 100 THEN 1 END) as \"Small\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 100 AND (pr.additions + pr.deletions) <= 500 THEN 1 END) as \"Medium\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 500 THEN 1 END) as \"Large\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY pr.author\nORDER BY \"PRs\" DESC, \"Total Changes\" DESC",
+          "rawSql": "SELECT\n  ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, SUM(pr.additions + pr.deletions) DESC) as \"#\",\n  pr.author as \"Author\",\n  COUNT(*) as \"PRs\",\n  SUM(pr.additions) as \"Total Additions\",\n  SUM(pr.deletions) as \"Total Deletions\",\n  SUM(pr.additions + pr.deletions) as \"Total Changes\",\n  ROUND(AVG(pr.additions + pr.deletions)::numeric) as \"Avg Changes\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) <= 100 THEN 1 END) as \"Small\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 100 AND (pr.additions + pr.deletions) <= 500 THEN 1 END) as \"Medium\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 500 THEN 1 END) as \"Large\"\nFROM prs pr\nWHERE pr.repository_name = '$repository'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY pr.author\nORDER BY \"PRs\" DESC, \"Total Changes\" DESC",
           "refId": "A"
         }
       ],
-      "title": "Author Code Change Statistics (Selected Period)",
+      "title": "Contributor Statistics",
+      "description": "Individual contributor metrics showing PR volume, code changes, and PR size distribution (Small <100, Medium 100-500, Large >500 lines)",
       "type": "table"
     }
   ],
