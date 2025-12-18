@@ -97,7 +97,8 @@ func parseCodeowners(content string) []string {
 
 			// Check if it's a team (contains /) vs individual user
 			if strings.Contains(owner, "/") {
-				teamSet[owner] = struct{}{}
+				// Store lowercase to match github_team_slug in teams table
+				teamSet[strings.ToLower(owner)] = struct{}{}
 			}
 		}
 	}

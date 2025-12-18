@@ -105,6 +105,13 @@ README.md
 `,
 			expected: []string{},
 		},
+		{
+			name: "mixed case team names - should be lowercased",
+			content: `* @wpengine/CSI
+/src/ @wpengine/Golden-Frontend
+`,
+			expected: []string{"wpengine/csi", "wpengine/golden-frontend"},
+		},
 	}
 
 	for _, tt := range tests {
