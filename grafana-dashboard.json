@@ -2234,6 +2234,49 @@
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "orange", "value": 25 },
+              { "color": "red", "value": 50 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 78 },
+      "id": 76,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH team_members AS (\n  SELECT DISTINCT member, github_team_slug\n  FROM teams\n  WHERE team = '$team'\n    AND member IN ($included_members)\n    AND github_team_slug IS NOT NULL\n)\nSELECT COUNT(*) as value\nFROM prs pr\nJOIN team_members tm ON pr.author = tm.member\nWHERE pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp\n  AND NOT EXISTS (\n    SELECT 1 FROM repository_owners ro\n    WHERE ro.org = pr.repository_owner\n      AND ro.repo_slug = pr.repository_name\n      AND ro.team_slug = tm.github_team_slug\n  );",
+          "refId": "A"
+        }
+      ],
+      "title": "Merged Foreign PRs",
+      "description": "Foreign PRs that were merged in the selected period",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
               { "color": "yellow", "value": 86400 },
               { "color": "orange", "value": 259200 },
               { "color": "red", "value": 604800 }
@@ -2243,7 +2286,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 78 },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 78 },
       "id": 72,
       "options": {
         "colorMode": "value",
@@ -2288,7 +2331,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 78 },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 78 },
       "id": 73,
       "options": {
         "colorMode": "value",
@@ -2331,7 +2374,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 78 },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 78 },
       "id": 74,
       "options": {
         "colorMode": "value",
