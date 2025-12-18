@@ -2408,13 +2408,18 @@
           "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
         },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "Age (days)" }, "properties": [
+          { "matcher": { "id": "byName", "options": "Open For (days)" }, "properties": [
+            { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+            { "id": "color", "value": { "mode": "continuous-RdYlGr", "reverse": true } },
+            { "id": "decimals", "value": 1 }
+          ]},
+          { "matcher": { "id": "byName", "options": "Lead Time (days)" }, "properties": [
             { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
             { "id": "color", "value": { "mode": "continuous-RdYlGr", "reverse": true } },
             { "id": "decimals", "value": 1 }
           ]},
           { "matcher": { "id": "byName", "options": "Title" }, "properties": [
-            { "id": "custom.width", "value": 350 }
+            { "id": "custom.width", "value": 300 }
           ]}
         ]
       },
@@ -2424,7 +2429,7 @@
         "cellHeight": "sm",
         "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
         "showHeader": true,
-        "sortBy": [{ "desc": true, "displayName": "Age (days)" }]
+        "sortBy": [{ "desc": true, "displayName": "Created" }]
       },
       "targets": [
         {
@@ -2432,7 +2437,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH team_members AS (\n  SELECT DISTINCT member, github_team_slug\n  FROM teams\n  WHERE team = '$team'\n    AND member IN ($included_members)\n    AND github_team_slug IS NOT NULL\n)\nSELECT\n  pr.title as \"Title\",\n  pr.author as \"Author\",\n  pr.repository_owner || '/' || pr.repository_name as \"Repository\",\n  pr.state as \"State\",\n  ROUND(EXTRACT(EPOCH FROM (NOW() - pr.created_at)) / 86400, 1) as \"Age (days)\",\n  pr.created_at as \"Created\",\n  pr.url as \"URL\"\nFROM prs pr\nJOIN team_members tm ON pr.author = tm.member\nWHERE pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\n  AND NOT EXISTS (\n    SELECT 1 FROM repository_owners ro\n    WHERE ro.org = pr.repository_owner\n      AND ro.repo_slug = pr.repository_name\n      AND ro.team_slug = tm.github_team_slug\n  )\nORDER BY pr.created_at DESC\nLIMIT 50;",
+          "rawSql": "WITH team_members AS (\n  SELECT DISTINCT member, github_team_slug\n  FROM teams\n  WHERE team = '$team'\n    AND member IN ($included_members)\n    AND github_team_slug IS NOT NULL\n)\nSELECT\n  pr.title as \"Title\",\n  pr.author as \"Author\",\n  pr.repository_owner || '/' || pr.repository_name as \"Repository\",\n  pr.state as \"State\",\n  CASE WHEN pr.state = 'OPEN' THEN ROUND(EXTRACT(EPOCH FROM (NOW() - pr.created_at)) / 86400, 1) ELSE NULL END as \"Open For (days)\",\n  CASE WHEN pr.state = 'MERGED' THEN ROUND(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) / 86400, 1) ELSE NULL END as \"Lead Time (days)\",\n  pr.created_at as \"Created\",\n  pr.merged_at as \"Merged\",\n  pr.url as \"URL\"\nFROM prs pr\nJOIN team_members tm ON pr.author = tm.member\nWHERE pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\n  AND NOT EXISTS (\n    SELECT 1 FROM repository_owners ro\n    WHERE ro.org = pr.repository_owner\n      AND ro.repo_slug = pr.repository_name\n      AND ro.team_slug = tm.github_team_slug\n  )\nORDER BY pr.created_at DESC\nLIMIT 50;",
           "refId": "A"
         }
       ],
