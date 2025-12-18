@@ -75,8 +75,8 @@ DO UPDATE SET
 TRUNCATE TABLE teams;
 
 -- name: CreateTeamMember :exec
-INSERT INTO teams (team, member, avatar_url)
-VALUES ($1, $2, $3);
+INSERT INTO teams (team, member, avatar_url, github_team_slug)
+VALUES ($1, $2, $3, LOWER($1));
 
 -- name: FetchSecurityPullRequests :many
 SELECT
