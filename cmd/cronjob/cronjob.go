@@ -10,6 +10,7 @@ import (
 
 	// Original imports
 	"github.com/akawula/DoraMatic/github/client"
+	"github.com/akawula/DoraMatic/github/codeowners"
 	"github.com/akawula/DoraMatic/github/organizations"
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
@@ -51,6 +52,9 @@ type GetReposFunc func(ghClient client.GitHubV4Client) ([]repositories.Repositor
 // GetPullRequestsFunc defines the signature for fetching pull requests.
 type GetPullRequestsFunc func(ghClient client.GitHubV4Client, org string, repo string, since time.Time, l *slog.Logger) ([]pullrequests.PullRequest, error)
 
+// GetCodeownersFunc defines the signature for fetching CODEOWNERS for a repository.
+type GetCodeownersFunc func(ghClient client.GitHubV4Client, org string, repo string, l *slog.Logger) (*codeowners.RepositoryOwnership, error)
+
 // SendMessageFunc defines the signature for sending slack messages.
 type SendMessageFunc func(prs []store.SecurityPR)
 
@@ -58,25 +62,27 @@ type SendMessageFunc func(prs []store.SecurityPR)
 
 // App holds the application's dependencies.
 type App struct {
-	log             *slog.Logger
-	db              store.Store
-	ghClient        client.GitHubV4Client
-	getTeamsFunc    GetTeamsFunc
-	getReposFunc    GetReposFunc
-	getPullReqsFunc GetPullRequestsFunc
-	sendMessageFunc SendMessageFunc
+	log               *slog.Logger
+	db                store.Store
+	ghClient          client.GitHubV4Client
+	getTeamsFunc      GetTeamsFunc
+	getReposFunc      GetReposFunc
+	getPullReqsFunc   GetPullRequestsFunc
+	getCodeownersFunc GetCodeownersFunc
+	sendMessageFunc   SendMessageFunc
 }
 
 // NewApp creates a new App instance with dependencies.
-func NewApp(l *slog.Logger, db store.Store, ghClient client.GitHubV4Client, getTeams GetTeamsFunc, getRepos GetReposFunc, getPRs GetPullRequestsFunc, sendMsg SendMessageFunc) *App {
+func NewApp(l *slog.Logger, db store.Store, ghClient client.GitHubV4Client, getTeams GetTeamsFunc, getRepos GetReposFunc, getPRs GetPullRequestsFunc, getCodeowners GetCodeownersFunc, sendMsg SendMessageFunc) *App {
 	return &App{
-		log:             l,
-		db:              db,
-		ghClient:        ghClient,
-		getTeamsFunc:    getTeams,
-		getReposFunc:    getRepos,
-		getPullReqsFunc: getPRs,
-		sendMessageFunc: sendMsg,
+		log:               l,
+		db:                db,
+		ghClient:          ghClient,
+		getTeamsFunc:      getTeams,
+		getReposFunc:      getRepos,
+		getPullReqsFunc:   getPRs,
+		getCodeownersFunc: getCodeowners,
+		sendMessageFunc:   sendMsg,
 	}
 }
 
@@ -115,6 +121,39 @@ func (a *App) Run(ctx context.Context) error {
 		// Continue even if saving fails, we still need to process PRs
 	} else {
 		a.log.Info("Repositories saved to database.", "count", len(repos))
+	}
+
+	// Fetch and save CODEOWNERS for each repository
+	a.log.Info("Fetching CODEOWNERS for repositories...")
+	var ownerships []codeowners.RepositoryOwnership
+	for i, repo := range repos {
+		repoOwner := string(repo.Owner.Login)
+		repoName := string(repo.Name)
+
+		a.log.Debug(fmt.Sprintf("Fetching CODEOWNERS [%d/%d]", i+1, len(repos)), "org", repoOwner, "repo", repoName)
+
+		ownership, err := a.getCodeownersFunc(a.ghClient, repoOwner, repoName, a.log)
+		if err != nil {
+			// Log error but continue to next repo - not all repos may have CODEOWNERS
+			a.log.Debug("Failed to fetch CODEOWNERS", "org", repoOwner, "repo", repoName, "error", err)
+			continue
+		}
+		if ownership != nil && len(ownership.Teams) > 0 {
+			ownerships = append(ownerships, *ownership)
+			a.log.Debug("Found CODEOWNERS teams", "org", repoOwner, "repo", repoName, "teams", len(ownership.Teams))
+		}
+	}
+
+	// Save repository ownerships to database
+	if len(ownerships) > 0 {
+		if err = a.db.SaveRepositoryOwners(ctx, ownerships); err != nil {
+			a.log.Error("Failed to save repository owners to DB", "error", err)
+			// Continue even if saving fails
+		} else {
+			a.log.Info("Repository owners saved to database.", "repos_with_owners", len(ownerships))
+		}
+	} else {
+		a.log.Info("No repository owners found in CODEOWNERS files.")
 	}
 
 	// Fetch and save pull requests for each repository
@@ -225,10 +264,11 @@ func main() {
 		l,
 		db,
 		ghClient,
-		organizations.GetTeams, // Real function
-		repositories.Get,       // Real function
-		pullrequests.Get,       // Real function
-		slack.SendMessage,      // Real function
+		organizations.GetTeams,    // Real function
+		repositories.Get,          // Real function
+		pullrequests.Get,          // Real function
+		codeowners.FetchCodeowners, // Real function for CODEOWNERS
+		slack.SendMessage,         // Real function
 	)
 
 	if err := app.Run(ctx); err != nil {

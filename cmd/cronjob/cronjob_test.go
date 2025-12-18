@@ -10,6 +10,7 @@ import (
 
 	// Import packages needed for mocks and App struct
 	"github.com/akawula/DoraMatic/github/client"
+	"github.com/akawula/DoraMatic/github/codeowners"    // Import codeowners for mock
 	"github.com/akawula/DoraMatic/github/organizations" // Import organizations for MemberInfo
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
@@ -55,6 +56,8 @@ type MockStore struct {
 	GetPullRequestTimeDataForStatsFunc func(ctx context.Context, arg sqlc.GetPullRequestTimeDataForStatsParams) ([]sqlc.GetPullRequestTimeDataForStatsRow, error)
 	// New method for team member review stats
 	GetTeamMemberReviewStatsByDateRangeFunc func(ctx context.Context, arg sqlc.GetTeamMemberReviewStatsByDateRangeParams) ([]sqlc.GetTeamMemberReviewStatsByDateRangeRow, error)
+	// New method for repository owners (CODEOWNERS)
+	SaveRepositoryOwnersFunc func(ctx context.Context, ownerships []codeowners.RepositoryOwnership) error
 
 	// Add fields to track calls if needed
 	SaveTeamsCalled                           bool
@@ -70,6 +73,7 @@ type MockStore struct {
 	DiagnoseLeadTimesCalled                   bool
 	GetPullRequestTimeDataForStatsCalled      bool
 	GetTeamMemberReviewStatsByDateRangeCalled bool
+	SaveRepositoryOwnersCalled                bool
 }
 
 // Updated SaveTeams method signature
@@ -224,6 +228,15 @@ func (m *MockStore) SaveSonarQubeMetrics(ctx context.Context, projectKey string,
 	return nil
 }
 
+// Implement SaveRepositoryOwners for MockStore
+func (m *MockStore) SaveRepositoryOwners(ctx context.Context, ownerships []codeowners.RepositoryOwnership) error {
+	m.SaveRepositoryOwnersCalled = true
+	if m.SaveRepositoryOwnersFunc != nil {
+		return m.SaveRepositoryOwnersFunc(ctx, ownerships)
+	}
+	return nil // Default mock behavior
+}
+
 // Mock function types for GitHub interactions
 // Updated MockGetTeamsFunc signature
 type MockGetTeamsFunc func(ghClient client.GitHubV4Client) (map[string][]organizations.MemberInfo, error)
@@ -300,6 +313,14 @@ func TestAppRun_Success(t *testing.T) {
 		sendMessageCalled = true // Mark as called
 		capturedSecPRs = prs     // Capture arguments
 	}
+	mockGetCodeownersImpl := func(ghClient client.GitHubV4Client, org string, repo string, l *slog.Logger) (*codeowners.RepositoryOwnership, error) {
+		// Return a mock ownership with one team
+		return &codeowners.RepositoryOwnership{
+			Org:      org,
+			RepoSlug: repo,
+			Teams:    []string{"test-org/test-team"},
+		}, nil
+	}
 
 	// Create App instance with mocks
 	app := NewApp(
@@ -309,6 +330,7 @@ func TestAppRun_Success(t *testing.T) {
 		mockGetTeamsImpl,        // Pass mock implementations directly
 		mockGetReposImpl,        // Pass mock implementations directly
 		mockGetPullRequestsImpl, // Pass mock implementations directly
+		mockGetCodeownersImpl,   // Pass mock implementations directly
 		mockSendMessageImpl,     // Pass mock implementations directly
 	)
 
