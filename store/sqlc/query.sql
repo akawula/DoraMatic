@@ -76,7 +76,7 @@ TRUNCATE TABLE teams;
 
 -- name: CreateTeamMember :exec
 INSERT INTO teams (team, member, avatar_url, github_team_slug)
-VALUES ($1, $2, $3, LOWER($1));
+VALUES ($1, $2, $3, LOWER($1::text));
 
 -- name: FetchSecurityPullRequests :many
 SELECT
