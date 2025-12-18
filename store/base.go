@@ -6,7 +6,8 @@ import (
 	// "fmt" // Remove unused import
 	"time"
 
-	"github.com/akawula/DoraMatic/github/organizations" // Import organizations package
+	"github.com/akawula/DoraMatic/github/codeowners"     // Import codeowners package
+	"github.com/akawula/DoraMatic/github/organizations"  // Import organizations package
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
 	"github.com/akawula/DoraMatic/store/sqlc" // Import sqlc package
@@ -74,7 +75,9 @@ type Store interface {
 	// SonarQube methods
 	SaveSonarQubeProject(ctx context.Context, projectKey, projectName string) error
 	SaveSonarQubeMetrics(ctx context.Context, projectKey string, metrics map[string]float64, recordedAt time.Time) error
-	// Removed duplicate Close()
+
+	// Repository ownership methods (CODEOWNERS)
+	SaveRepositoryOwners(ctx context.Context, ownerships []codeowners.RepositoryOwnership) error
 }
 
 // getQueryRepos is no longer used by postgres.go after sqlc refactor

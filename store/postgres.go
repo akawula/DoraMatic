@@ -10,7 +10,8 @@ import (
 	// "slices" // No longer needed directly in this file after refactor
 	"time"
 
-	"github.com/akawula/DoraMatic/github/organizations" // Import organizations package
+	"github.com/akawula/DoraMatic/github/codeowners"     // Import codeowners package
+	"github.com/akawula/DoraMatic/github/organizations"  // Import organizations package
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
 	"github.com/akawula/DoraMatic/store/sqlc" // Import the generated package
@@ -126,7 +127,7 @@ func (p *Postgres) SaveRepos(ctx context.Context, repos []repositories.Repositor
 
 	qtx := p.queries.WithTx(tx) // Use queries within the transaction
 
-	// Truncate the table first
+	// Truncate the repositories table (CASCADE handles dependent tables like repository_owners)
 	err = qtx.TruncateRepositories(ctx)
 	if err != nil {
 		p.Logger.Error("Failed to truncate repositories", "error", err)
@@ -676,5 +677,63 @@ func (p *Postgres) SaveSonarQubeMetrics(ctx context.Context, projectKey string, 
 		return err
 	}
 
+	return nil
+}
+
+// SaveRepositoryOwners saves repository ownership data from CODEOWNERS files.
+// It clears existing ownership for each repo before inserting new records.
+func (p *Postgres) SaveRepositoryOwners(ctx context.Context, ownerships []codeowners.RepositoryOwnership) error {
+	if len(ownerships) == 0 {
+		p.Logger.Info("No repository ownerships to save.")
+		return nil
+	}
+
+	tx, err := p.connPool.Begin(ctx)
+	if err != nil {
+		p.Logger.Error("Failed to begin transaction for saving repository owners", "error", err)
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := p.queries.WithTx(tx)
+
+	for _, ownership := range ownerships {
+		// Delete existing owners for this repository before inserting new ones
+		err = qtx.DeleteRepositoryOwners(ctx, sqlc.DeleteRepositoryOwnersParams{
+			Org:      ownership.Org,
+			RepoSlug: ownership.RepoSlug,
+		})
+		if err != nil {
+			p.Logger.Error("Failed to delete existing repository owners",
+				"org", ownership.Org,
+				"repo", ownership.RepoSlug,
+				"error", err)
+			return err
+		}
+
+		// Insert new owners
+		for _, teamSlug := range ownership.Teams {
+			err = qtx.UpsertRepositoryOwner(ctx, sqlc.UpsertRepositoryOwnerParams{
+				Org:      ownership.Org,
+				RepoSlug: ownership.RepoSlug,
+				TeamSlug: teamSlug,
+			})
+			if err != nil {
+				p.Logger.Error("Failed to insert repository owner",
+					"org", ownership.Org,
+					"repo", ownership.RepoSlug,
+					"team", teamSlug,
+					"error", err)
+				return err
+			}
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		p.Logger.Error("Failed to commit repository owners transaction", "error", err)
+		return err
+	}
+
+	p.Logger.Info("Repository owners saved successfully", "count", len(ownerships))
 	return nil
 }
