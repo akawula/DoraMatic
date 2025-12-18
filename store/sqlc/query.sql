@@ -10,7 +10,7 @@ WHERE ($1::text = '' OR slug ILIKE '%' || $1 || '%')
 LIMIT $2 OFFSET $3;
 
 -- name: TruncateRepositories :exec
-TRUNCATE TABLE repositories;
+TRUNCATE TABLE repositories CASCADE;
 
 -- name: CreateRepository :exec
 INSERT INTO repositories (org, slug, language)
@@ -530,3 +530,174 @@ WHERE
          p.author ILIKE '%' || sqlc.arg(text_search_term)::text || '%')
     AND (sqlc.arg(team_name)::text = '' OR t.team = sqlc.arg(team_name)::text)
     AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[]));
+
+
+-- Repository Owners (CODEOWNERS) --
+
+-- name: TruncateRepositoryOwners :exec
+TRUNCATE TABLE repository_owners;
+
+-- name: UpsertRepositoryOwner :exec
+INSERT INTO repository_owners (org, repo_slug, team_slug)
+VALUES ($1, $2, $3)
+ON CONFLICT (org, repo_slug, team_slug) DO NOTHING;
+
+-- name: DeleteRepositoryOwners :exec
+DELETE FROM repository_owners WHERE org = $1 AND repo_slug = $2;
+
+-- name: GetRepositoryOwners :many
+SELECT team_slug FROM repository_owners WHERE org = $1 AND repo_slug = $2;
+
+-- name: GetAllRepositoryOwners :many
+SELECT org, repo_slug, team_slug FROM repository_owners;
+
+-- Teams with github_team_slug --
+
+-- name: UpdateTeamGithubSlug :exec
+UPDATE teams SET github_team_slug = $1 WHERE team = $2;
+
+-- name: GetTeamByGithubSlug :many
+SELECT team, member, avatar_url, github_team_slug
+FROM teams WHERE github_team_slug = $1;
+
+-- name: GetDistinctTeamsWithGithubSlug :many
+SELECT DISTINCT team, github_team_slug
+FROM teams WHERE github_team_slug IS NOT NULL;
+
+
+-- Foreign PR Detection --
+-- A PR is "foreign" if the author is not a member of any team that owns the repository
+
+-- name: GetForeignPRsByTeam :many
+WITH AuthorTeams AS (
+    -- Get all teams the PR author belongs to (via github_team_slug)
+    SELECT DISTINCT p.id as pr_id, t.github_team_slug
+    FROM prs p
+    JOIN teams t ON p.author = t.member
+    WHERE t.github_team_slug IS NOT NULL
+),
+PROwnership AS (
+    -- Check if author is in any team that owns the repo
+    SELECT
+        p.id as pr_id,
+        CASE
+            WHEN EXISTS (
+                SELECT 1 FROM repository_owners ro
+                JOIN AuthorTeams at ON at.pr_id = p.id AND ro.team_slug = at.github_team_slug
+                WHERE ro.org = p.repository_owner AND ro.repo_slug = p.repository_name
+            ) THEN false
+            ELSE true
+        END as is_foreign
+    FROM prs p
+)
+SELECT
+    p.id,
+    p.url,
+    p.title,
+    p.repository_name,
+    p.repository_owner,
+    p.author,
+    p.state,
+    p.created_at,
+    p.merged_at,
+    p.review_requested_at,
+    po.is_foreign
+FROM prs p
+JOIN teams t ON p.author = t.member
+JOIN PROwnership po ON p.id = po.pr_id
+WHERE t.team = sqlc.arg(team_name)
+  AND po.is_foreign = true
+  AND p.state = sqlc.arg(pr_state)
+  AND p.created_at >= sqlc.arg(start_date)::timestamptz
+  AND p.created_at <= sqlc.arg(end_date)::timestamptz
+GROUP BY p.id, p.url, p.title, p.repository_name, p.repository_owner,
+         p.author, p.state, p.created_at, p.merged_at, p.review_requested_at, po.is_foreign
+ORDER BY p.created_at DESC;
+
+
+-- Foreign PR Metrics by Team --
+-- Shows teams that have PRs waiting in foreign repos
+
+-- name: GetForeignPRMetricsByTeam :many
+WITH AuthorTeamSlugs AS (
+    SELECT DISTINCT p.id as pr_id, t.github_team_slug, t.team
+    FROM prs p
+    JOIN teams t ON p.author = t.member
+    WHERE t.github_team_slug IS NOT NULL
+),
+ForeignPRs AS (
+    SELECT
+        p.id as pr_id,
+        ats.team,
+        p.created_at,
+        p.review_requested_at,
+        p.merged_at,
+        p.state
+    FROM prs p
+    JOIN AuthorTeamSlugs ats ON ats.pr_id = p.id
+    WHERE NOT EXISTS (
+        SELECT 1 FROM repository_owners ro
+        WHERE ro.org = p.repository_owner
+          AND ro.repo_slug = p.repository_name
+          AND ro.team_slug = ats.github_team_slug
+    )
+)
+SELECT
+    fp.team,
+    COUNT(*) FILTER (WHERE fp.state = 'OPEN')::int as open_foreign_prs,
+    COUNT(*) FILTER (WHERE fp.state = 'MERGED')::int as merged_foreign_prs,
+    COALESCE(AVG(
+        CASE
+            WHEN fp.state = 'MERGED' AND fp.merged_at IS NOT NULL AND fp.review_requested_at IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (fp.merged_at - fp.review_requested_at))
+            ELSE NULL
+        END
+    ), 0)::float as avg_time_to_merge_seconds
+FROM ForeignPRs fp
+WHERE fp.created_at >= sqlc.arg(start_date)::timestamptz
+  AND fp.created_at <= sqlc.arg(end_date)::timestamptz
+GROUP BY fp.team
+ORDER BY open_foreign_prs DESC, avg_time_to_merge_seconds DESC;
+
+
+-- Teams Slow at Reviewing (as code owners) --
+-- Shows teams that own repos but are slow to review PRs from non-members
+
+-- name: GetSlowReviewingTeams :many
+WITH FirstReviewByOwnerTeam AS (
+    SELECT
+        prr.pull_request_id,
+        ro.team_slug,
+        MIN(prr.submitted_at) as first_review_at
+    FROM pull_request_reviews prr
+    JOIN prs p ON prr.pull_request_id = p.id
+    JOIN repository_owners ro ON ro.org = p.repository_owner AND ro.repo_slug = p.repository_name
+    JOIN teams t ON t.github_team_slug = ro.team_slug AND prr.author_login = t.member
+    WHERE prr.state IN ('APPROVED', 'CHANGES_REQUESTED')
+    GROUP BY prr.pull_request_id, ro.team_slug
+)
+SELECT
+    ro.team_slug,
+    COUNT(DISTINCT p.id)::int as total_prs_to_review,
+    COUNT(DISTINCT CASE WHEN p.state = 'OPEN' AND fr.first_review_at IS NULL THEN p.id END)::int as pending_reviews,
+    COALESCE(AVG(
+        CASE
+            WHEN fr.first_review_at IS NOT NULL AND p.review_requested_at IS NOT NULL
+                 AND fr.first_review_at > p.review_requested_at
+            THEN EXTRACT(EPOCH FROM (fr.first_review_at - p.review_requested_at))
+            ELSE NULL
+        END
+    ), 0)::float as avg_time_to_first_review_seconds
+FROM prs p
+JOIN repository_owners ro ON ro.org = p.repository_owner AND ro.repo_slug = p.repository_name
+LEFT JOIN FirstReviewByOwnerTeam fr ON fr.pull_request_id = p.id AND fr.team_slug = ro.team_slug
+-- Exclude PRs from authors who are members of the owning team
+WHERE NOT EXISTS (
+    SELECT 1 FROM teams t
+    WHERE t.member = p.author AND t.github_team_slug = ro.team_slug
+)
+AND p.created_at >= sqlc.arg(start_date)::timestamptz
+AND p.created_at <= sqlc.arg(end_date)::timestamptz
+GROUP BY ro.team_slug
+HAVING COUNT(DISTINCT p.id) > 0
+ORDER BY pending_reviews DESC, avg_time_to_first_review_seconds DESC;
