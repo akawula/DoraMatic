@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	// "slices" // No longer needed directly in this file after refactor
 	"time"
 
-	"github.com/akawula/DoraMatic/github/codeowners"     // Import codeowners package
-	"github.com/akawula/DoraMatic/github/organizations"  // Import organizations package
+	"github.com/akawula/DoraMatic/github/codeowners"    // Import codeowners package
+	"github.com/akawula/DoraMatic/github/organizations" // Import organizations package
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
 	"github.com/akawula/DoraMatic/store/sqlc" // Import the generated package
@@ -385,11 +386,14 @@ func (p *Postgres) SaveTeams(ctx context.Context, teams map[string][]organizatio
 			// Prepare params for CreateTeamMember, including avatar_url
 			// Assuming avatar_url is nullable TEXT in DB, use sql.NullString
 			avatarURL := sql.NullString{String: memberInfo.AvatarUrl, Valid: memberInfo.AvatarUrl != ""}
+			// Set github_team_slug as lowercase version of team name for CODEOWNERS matching
+			githubSlug := pgtype.Text{String: strings.ToLower(teamName), Valid: true}
 
 			err = qtx.CreateTeamMember(ctx, sqlc.CreateTeamMemberParams{
-				Team:      teamName,
-				Member:    memberInfo.Login, // Use Login from MemberInfo
-				AvatarUrl: avatarURL,        // Pass the avatar URL
+				Team:           teamName,
+				Member:         memberInfo.Login,  // Use Login from MemberInfo
+				AvatarUrl:      avatarURL,         // Pass the avatar URL
+				GithubTeamSlug: githubSlug,        // Pass the GitHub team slug
 			})
 			if err != nil {
 				p.Logger.Error("Failed to insert team member", "team", teamName, "member", memberInfo.Login, "error", err)

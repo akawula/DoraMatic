@@ -172,17 +172,23 @@ func (q *Queries) CreateRepository(ctx context.Context, arg CreateRepositoryPara
 
 const createTeamMember = `-- name: CreateTeamMember :exec
 INSERT INTO teams (team, member, avatar_url, github_team_slug)
-VALUES ($1, $2, $3, LOWER($1::text))
+VALUES ($1, $2, $3, $4)
 `
 
 type CreateTeamMemberParams struct {
-	Team      string         `db:"team"`
-	Member    string         `db:"member"`
-	AvatarUrl sql.NullString `db:"avatar_url"`
+	Team           string         `db:"team"`
+	Member         string         `db:"member"`
+	AvatarUrl      sql.NullString `db:"avatar_url"`
+	GithubTeamSlug pgtype.Text    `db:"github_team_slug"`
 }
 
 func (q *Queries) CreateTeamMember(ctx context.Context, arg CreateTeamMemberParams) error {
-	_, err := q.db.Exec(ctx, createTeamMember, arg.Team, arg.Member, arg.AvatarUrl)
+	_, err := q.db.Exec(ctx, createTeamMember,
+		arg.Team,
+		arg.Member,
+		arg.AvatarUrl,
+		arg.GithubTeamSlug,
+	)
 	return err
 }
 
