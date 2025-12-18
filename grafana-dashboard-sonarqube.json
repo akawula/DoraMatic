@@ -3,10 +3,7 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -15,880 +12,1118 @@
       }
     ]
   },
+  "description": "Engineering Manager view of code quality across the portfolio",
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "links": [],
   "panels": [
     {
-      "datasource": {
-        "type": "postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
-      "options": {
-        "legend": {
-          "calcs": ["last"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  AVG(metric_value) as \"Average Bugs per Project\"\nFROM sonarqube_metrics\nWHERE metric_key = 'bugs'\n  AND $__timeFilter(recorded_at)\nGROUP BY DATE(recorded_at)\nORDER BY time;",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
-        }
-      ],
-      "title": "Average Bugs per Project Over Time",
-      "type": "timeseries"
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "panels": [],
+      "title": "Portfolio Health Overview",
+      "type": "row"
     },
     {
-      "datasource": {
-        "type": "postgres"
-      },
+      "datasource": { "type": "postgres" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
+          "color": { "mode": "thresholds" },
           "mappings": [],
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 50 },
+              { "color": "yellow", "value": 75 },
+              { "color": "green", "value": 90 }
             ]
           },
           "unit": "percent"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
-      "id": 2,
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 1 },
+      "id": 1,
       "options": {
-        "legend": {
-          "calcs": ["last"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres"
-          },
+          "datasource": { "type": "postgres" },
           "editorMode": "code",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  AVG(metric_value) as \"Average Coverage\"\nFROM sonarqube_metrics\nWHERE metric_key = 'coverage'\n  AND $__timeFilter(recorded_at)\nGROUP BY DATE(recorded_at)\nORDER BY time;",
+          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key, metric_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key IN ('reliability_rating', 'security_rating', 'sqale_rating')\n),\nproject_gates AS (\n  SELECT project_key,\n    MAX(CASE WHEN metric_key = 'reliability_rating' THEN metric_value END) as reliability,\n    MAX(CASE WHEN metric_key = 'security_rating' THEN metric_value END) as security,\n    MAX(CASE WHEN metric_key = 'sqale_rating' THEN metric_value END) as maintainability\n  FROM latest WHERE rn = 1 GROUP BY project_key\n)\nSELECT \n  ROUND((100.0 * COUNT(*) FILTER (WHERE reliability <= 2 AND security <= 2 AND maintainability <= 2) / NULLIF(COUNT(*), 0))::numeric, 1) as value\nFROM project_gates;",
           "refId": "A"
         }
       ],
-      "title": "Average Test Coverage Over Time",
-      "type": "timeseries"
+      "title": "Quality Gate Pass Rate",
+      "description": "Percentage of projects passing all quality gates (reliability, security, maintainability rated A or B). Target: >90%",
+      "type": "gauge"
     },
     {
-      "datasource": {
-        "type": "postgres"
-      },
+      "datasource": { "type": "postgres" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
+          "color": { "mode": "thresholds" },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 10
-              }
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
             ]
           },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 0,
-        "y": 9
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 1 },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
       },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key, metric_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'security_rating'\n)\nSELECT COUNT(*) as value FROM latest WHERE rn = 1 AND metric_value >= 4;",
+          "refId": "A"
+        }
+      ],
+      "title": "Critical Security Issues",
+      "description": "Number of projects with security rating D or E. These require immediate attention to address vulnerabilities",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 500 }
+            ]
+          },
+          "unit": "d"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 1 },
       "id": 3,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres"
-          },
+          "datasource": { "type": "postgres" },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT AVG(metric_value) as value\nFROM sonarqube_metrics\nWHERE metric_key = 'bugs'\n  AND recorded_at = (SELECT MAX(recorded_at) FROM sonarqube_metrics);",
+          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'sqale_index'\n)\nSELECT ROUND((SUM(metric_value) / 480.0)::numeric, 1) as value FROM latest WHERE rn = 1;",
           "refId": "A"
         }
       ],
-      "title": "Current Avg Bugs/Project",
+      "title": "Total Tech Debt",
+      "description": "Cumulative technical debt across all projects measured in days of effort to remediate",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "postgres"
-      },
+      "datasource": { "type": "postgres" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
+          "color": { "mode": "thresholds" },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 5
-              },
-              {
-                "color": "green",
-                "value": 10
-              }
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 40 },
+              { "color": "yellow", "value": 60 },
+              { "color": "green", "value": 80 }
             ]
           },
-          "unit": "short"
+          "unit": "percent"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 4,
-        "y": 9
-      },
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 1 },
       "id": 4,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres"
-          },
+          "datasource": { "type": "postgres" },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT AVG(metric_value) as value\nFROM sonarqube_metrics\nWHERE metric_key = 'vulnerabilities'\n  AND recorded_at = (SELECT MAX(recorded_at) FROM sonarqube_metrics);",
+          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'coverage'\n)\nSELECT ROUND(AVG(metric_value)::numeric, 1) as value FROM latest WHERE rn = 1;",
           "refId": "A"
         }
       ],
-      "title": "Current Avg Vulnerabilities/Project",
+      "title": "Avg Test Coverage",
+      "description": "Average test coverage across all projects. Industry target is 80%. Below 60% indicates significant risk",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "postgres"
-      },
+      "datasource": { "type": "postgres" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
+          "color": { "mode": "thresholds" },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 40
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "green",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 8,
-        "y": 9
-      },
-      "id": 5,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT AVG(metric_value) as value\nFROM sonarqube_metrics\nWHERE metric_key = 'coverage'\n  AND recorded_at = (SELECT MAX(recorded_at) FROM sonarqube_metrics);",
-          "refId": "A"
-        }
-      ],
-      "title": "Current Avg Coverage",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
+              { "color": "green", "value": null }
             ]
           },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 12,
-        "y": 9
-      },
-      "id": 6,
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 1 },
+      "id": 5,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
+        "graphMode": "none",
+        "justifyMode": "center",
         "orientation": "auto",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres"
-          },
+          "datasource": { "type": "postgres" },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(DISTINCT project_key) as value\nFROM sonarqube_projects;",
+          "rawSql": "SELECT COUNT(DISTINCT project_key) as value FROM sonarqube_projects;",
           "refId": "A"
         }
       ],
       "title": "Total Projects",
+      "description": "Number of projects configured in SonarQube and being tracked for code quality",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "postgres"
-      },
+      "datasource": { "type": "postgres" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "from": -1000000, "result": { "color": "green", "index": 0, "text": "" }, "to": -0.01 }, "type": "range" },
+            { "options": { "from": 0, "result": { "color": "text", "index": 1, "text": "" }, "to": 0 }, "type": "range" },
+            { "options": { "from": 0.01, "result": { "color": "red", "index": 2, "text": "" }, "to": 1000000 }, "type": "range" }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 100
-              }
+              { "color": "green", "value": null },
+              { "color": "text", "value": 0 },
+              { "color": "red", "value": 1 }
             ]
           },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 6,
-        "w": 4,
-        "x": 16,
-        "y": 9
-      },
-      "id": 7,
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 1 },
+      "id": 6,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH current_bugs AS (\n  SELECT SUM(metric_value) as total\n  FROM sonarqube_metrics\n  WHERE metric_key = 'bugs'\n    AND recorded_at = (SELECT MAX(recorded_at) FROM sonarqube_metrics)\n),\nweek_ago_bugs AS (\n  SELECT SUM(metric_value) as total\n  FROM sonarqube_metrics\n  WHERE metric_key = 'bugs'\n    AND recorded_at = (\n      SELECT MAX(recorded_at) FROM sonarqube_metrics \n      WHERE recorded_at < NOW() - INTERVAL '7 days'\n    )\n)\nSELECT COALESCE(c.total, 0) - COALESCE(w.total, 0) as \"7d Bug Delta\"\nFROM current_bugs c, week_ago_bugs w;",
+          "refId": "A"
+        }
+      ],
+      "title": "7-Day Bug Delta",
+      "description": "Change in total bugs over past 7 days. Green = decreasing, Red = increasing",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "id": 101,
+      "panels": [],
+      "title": "Quality Ratings Distribution",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "mappings": [],
+          "unit": "short"
         },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "A" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "B" }, "properties": [{ "id": "color", "value": { "fixedColor": "light-green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "C" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "D" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "E" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 7 },
+      "id": 7,
+      "options": {
+        "displayLabels": ["name", "value"],
+        "legend": { "displayMode": "list", "placement": "right", "showLegend": true, "values": ["value"] },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'reliability_rating'\n)\nSELECT \n  CASE \n    WHEN metric_value = 1 THEN 'A'\n    WHEN metric_value = 2 THEN 'B'\n    WHEN metric_value = 3 THEN 'C'\n    WHEN metric_value = 4 THEN 'D'\n    ELSE 'E'\n  END as rating,\n  COUNT(*) as count\nFROM latest WHERE rn = 1\nGROUP BY rating ORDER BY rating;",
+          "refId": "A"
+        }
+      ],
+      "title": "Reliability Rating",
+      "description": "Distribution by reliability rating. A=0 bugs, B=minor, C=major, D=critical, E=blocker bugs",
+      "transformations": [
+        { "id": "organize", "options": { "indexByName": {}, "renameByName": { "count": "", "rating": "" } } }
+      ],
+      "type": "piechart"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "A" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "B" }, "properties": [{ "id": "color", "value": { "fixedColor": "light-green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "C" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "D" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "E" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 7 },
+      "id": 8,
+      "options": {
+        "displayLabels": ["name", "value"],
+        "legend": { "displayMode": "list", "placement": "right", "showLegend": true, "values": ["value"] },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'security_rating'\n)\nSELECT \n  CASE \n    WHEN metric_value = 1 THEN 'A'\n    WHEN metric_value = 2 THEN 'B'\n    WHEN metric_value = 3 THEN 'C'\n    WHEN metric_value = 4 THEN 'D'\n    ELSE 'E'\n  END as rating,\n  COUNT(*) as count\nFROM latest WHERE rn = 1\nGROUP BY rating ORDER BY rating;",
+          "refId": "A"
+        }
+      ],
+      "title": "Security Rating",
+      "description": "Distribution by security rating. A=0 vulns, B=minor, C=major, D=critical, E=blocker vulns",
+      "type": "piechart"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "A" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "B" }, "properties": [{ "id": "color", "value": { "fixedColor": "light-green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "C" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "D" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "E" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 7 },
+      "id": 9,
+      "options": {
+        "displayLabels": ["name", "value"],
+        "legend": { "displayMode": "list", "placement": "right", "showLegend": true, "values": ["value"] },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'sqale_rating'\n)\nSELECT \n  CASE \n    WHEN metric_value = 1 THEN 'A'\n    WHEN metric_value = 2 THEN 'B'\n    WHEN metric_value = 3 THEN 'C'\n    WHEN metric_value = 4 THEN 'D'\n    ELSE 'E'\n  END as rating,\n  COUNT(*) as count\nFROM latest WHERE rn = 1\nGROUP BY rating ORDER BY rating;",
+          "refId": "A"
+        }
+      ],
+      "title": "Maintainability Rating",
+      "description": "Distribution by maintainability. Based on debt ratio: A≤5%, B≤10%, C≤20%, D≤50%, E>50%",
+      "type": "piechart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "panels": [],
+      "title": "Trends & Velocity",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Bugs" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Vulnerabilities" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Code Smells" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "id": 10,
+      "options": {
+        "legend": { "calcs": ["last", "min", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  SUM(CASE WHEN metric_key = 'bugs' THEN metric_value ELSE 0 END) as \"Bugs\",\n  SUM(CASE WHEN metric_key = 'vulnerabilities' THEN metric_value ELSE 0 END) as \"Vulnerabilities\",\n  SUM(CASE WHEN metric_key = 'code_smells' THEN metric_value ELSE 0 END) / 100 as \"Code Smells (100s)\"\nFROM sonarqube_metrics\nWHERE metric_key IN ('bugs', 'vulnerabilities', 'code_smells')\n  AND $__timeFilter(recorded_at)\nGROUP BY DATE(recorded_at)\nORDER BY time;",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Issues Trend",
+      "description": "Historical trend of bugs, vulnerabilities, and code smells. Downward trends indicate improvement",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Days of Debt",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "hue",
+            "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Debt Delta (days)" }, "properties": [
+            { "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }
+          ]}
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "id": 11,
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH daily_debt AS (\n  SELECT \n    DATE(recorded_at) as day,\n    SUM(metric_value) / 480.0 as total_debt_days\n  FROM sonarqube_metrics\n  WHERE metric_key = 'sqale_index'\n    AND $__timeFilter(recorded_at)\n  GROUP BY DATE(recorded_at)\n)\nSELECT \n  day as time,\n  ROUND((total_debt_days - LAG(total_debt_days) OVER (ORDER BY day))::numeric, 2) as \"Debt Delta (days)\"\nFROM daily_debt\nORDER BY day;",
+          "refId": "A"
+        }
+      ],
+      "title": "Tech Debt Velocity",
+      "description": "Daily change in technical debt. Positive = accumulating debt, Negative = paying down debt",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line+area" }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": null },
+            { "color": "transparent", "value": 80 }
+          ]},
+          "unit": "percent"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Avg Coverage" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Min Coverage" }, "properties": [
+            { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+            { "id": "custom.lineStyle", "value": { "dash": [10, 10], "fill": "dash" } },
+            { "id": "custom.fillOpacity", "value": 0 }
+          ]},
+          { "matcher": { "id": "byName", "options": "Max Coverage" }, "properties": [
+            { "id": "color", "value": { "fixedColor": "dark-green", "mode": "fixed" } },
+            { "id": "custom.lineStyle", "value": { "dash": [10, 10], "fill": "dash" } },
+            { "id": "custom.fillOpacity", "value": 0 }
+          ]}
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+      "id": 12,
+      "options": {
+        "legend": { "calcs": ["last"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  ROUND(AVG(metric_value)::numeric, 1) as \"Avg Coverage\",\n  ROUND(MIN(metric_value)::numeric, 1) as \"Min Coverage\",\n  ROUND(MAX(metric_value)::numeric, 1) as \"Max Coverage\"\nFROM sonarqube_metrics\nWHERE metric_key = 'coverage'\n  AND $__timeFilter(recorded_at)\nGROUP BY DATE(recorded_at)\nORDER BY time;",
+          "refId": "A"
+        }
+      ],
+      "title": "Test Coverage Trend",
+      "description": "Average, min, and max test coverage over time. Red zone indicates coverage below 80% target",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+      "id": 13,
+      "options": {
+        "legend": { "calcs": ["last"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  ROUND(AVG(metric_value)::numeric, 1) as \"Avg Duplication %\"\nFROM sonarqube_metrics\nWHERE metric_key = 'duplicated_lines_density'\n  AND $__timeFilter(recorded_at)\nGROUP BY DATE(recorded_at)\nORDER BY time;",
+          "refId": "A"
+        }
+      ],
+      "title": "Code Duplication Trend",
+      "description": "Percentage of duplicated lines over time. Lower is better - high duplication increases maintenance burden",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "id": 103,
+      "panels": [],
+      "title": "Projects Needing Attention",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "mappings": [
+            { "options": { "1": { "color": "green", "index": 0, "text": "A" }, "2": { "color": "light-green", "index": 1, "text": "B" }, "3": { "color": "yellow", "index": 2, "text": "C" }, "4": { "color": "orange", "index": 3, "text": "D" }, "5": { "color": "red", "index": 4, "text": "E" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "project_name" }, "properties": [{ "id": "custom.width", "value": 280 }] },
+          { "matcher": { "id": "byName", "options": "bugs" }, "properties": [
+            { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+            { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "orange", "value": 15 }, { "color": "red", "value": 30 }] } }
+          ]},
+          { "matcher": { "id": "byName", "options": "vulnerabilities" }, "properties": [
+            { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+            { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "orange", "value": 5 }, { "color": "red", "value": 10 }] } }
+          ]},
+          { "matcher": { "id": "byName", "options": "coverage" }, "properties": [
+            { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+            { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 40 }, { "color": "yellow", "value": 60 }, { "color": "green", "value": 80 }] } },
+            { "id": "unit", "value": "percent" }
+          ]},
+          { "matcher": { "id": "byName", "options": "debt_days" }, "properties": [
+            { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+            { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "orange", "value": 20 }, { "color": "red", "value": 50 }] } },
+            { "id": "unit", "value": "d" },
+            { "id": "displayName", "value": "Tech Debt" }
+          ]},
+          { "matcher": { "id": "byName", "options": "reliability" }, "properties": [
+            { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+          ]},
+          { "matcher": { "id": "byName", "options": "security" }, "properties": [
+            { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+          ]},
+          { "matcher": { "id": "byName", "options": "maintainability" }, "properties": [
+            { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+          ]},
+          { "matcher": { "id": "byName", "options": "risk_score" }, "properties": [
+            { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+            { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 30 }, { "color": "orange", "value": 60 }, { "color": "red", "value": 80 }] } },
+            { "id": "displayName", "value": "Risk Score" }
+          ]},
+          { "matcher": { "id": "byName", "options": "lines_of_code" }, "properties": [
+            { "id": "unit", "value": "locale" },
+            { "id": "displayName", "value": "LOC" }
+          ]}
+        ]
+      },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 32 },
+      "id": 14,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Risk Score" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH latest_metrics AS (\n  SELECT \n    project_key, metric_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key, metric_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics\n),\npivoted AS (\n  SELECT \n    project_key,\n    MAX(CASE WHEN metric_key = 'bugs' THEN metric_value END) as bugs,\n    MAX(CASE WHEN metric_key = 'vulnerabilities' THEN metric_value END) as vulnerabilities,\n    MAX(CASE WHEN metric_key = 'code_smells' THEN metric_value END) as code_smells,\n    MAX(CASE WHEN metric_key = 'coverage' THEN metric_value END) as coverage,\n    MAX(CASE WHEN metric_key = 'ncloc' THEN metric_value END) as lines_of_code,\n    MAX(CASE WHEN metric_key = 'sqale_index' THEN metric_value END) / 480.0 as debt_days,\n    MAX(CASE WHEN metric_key = 'reliability_rating' THEN metric_value END) as reliability,\n    MAX(CASE WHEN metric_key = 'security_rating' THEN metric_value END) as security,\n    MAX(CASE WHEN metric_key = 'sqale_rating' THEN metric_value END) as maintainability\n  FROM latest_metrics WHERE rn = 1\n  GROUP BY project_key\n)\nSELECT \n  p.project_name,\n  ROUND(pv.bugs::numeric) as bugs,\n  ROUND(pv.vulnerabilities::numeric) as vulnerabilities,\n  ROUND(pv.coverage::numeric, 1) as coverage,\n  ROUND(pv.debt_days::numeric, 1) as debt_days,\n  pv.reliability::int as reliability,\n  pv.security::int as security,\n  pv.maintainability::int as maintainability,\n  ROUND(pv.lines_of_code::numeric) as lines_of_code,\n  ROUND((\n    COALESCE(pv.bugs, 0) * 3 + \n    COALESCE(pv.vulnerabilities, 0) * 5 + \n    GREATEST(0, 80 - COALESCE(pv.coverage, 0)) * 0.5 +\n    COALESCE(pv.debt_days, 0) * 0.5\n  )::numeric, 1) as risk_score\nFROM sonarqube_projects p\nJOIN pivoted pv ON p.project_key = pv.project_key\nWHERE pv.bugs IS NOT NULL OR pv.vulnerabilities IS NOT NULL\nORDER BY risk_score DESC\nLIMIT 30;",
+          "refId": "A"
+        }
+      ],
+      "title": "Projects by Risk Score",
+      "description": "Projects ranked by risk (bugs×3 + vulns×5 + coverage_gap×0.5 + debt×0.5). Higher score = more attention needed",
+      "type": "table"
+    },
+    {
+      "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 44 },
+      "id": 104,
+      "panels": [
+        {
+          "datasource": { "type": "postgres" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+            },
+            "overrides": [
+              { "matcher": { "id": "byName", "options": "coverage" }, "properties": [{ "id": "unit", "value": "percent" }] },
+              { "matcher": { "id": "byName", "options": "duplication" }, "properties": [{ "id": "unit", "value": "percent" }] },
+              { "matcher": { "id": "byName", "options": "debt_hours" }, "properties": [{ "id": "unit", "value": "h" }] },
+              { "matcher": { "id": "byName", "options": "lines_of_code" }, "properties": [{ "id": "unit", "value": "locale" }] }
+            ]
+          },
+          "gridPos": { "h": 12, "w": 24, "x": 0, "y": 45 },
+          "id": 15,
+          "options": {
+            "cellHeight": "sm",
+            "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+            "showHeader": true,
+            "sortBy": [{ "desc": true, "displayName": "lines_of_code" }]
+          },
+          "targets": [
+            {
+              "datasource": { "type": "postgres" },
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "WITH latest_metrics AS (\n  SELECT \n    project_key, metric_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key, metric_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics\n)\nSELECT \n  p.project_name,\n  MAX(CASE WHEN lm.metric_key = 'bugs' THEN lm.metric_value END) as bugs,\n  MAX(CASE WHEN lm.metric_key = 'vulnerabilities' THEN lm.metric_value END) as vulnerabilities,\n  MAX(CASE WHEN lm.metric_key = 'code_smells' THEN lm.metric_value END) as code_smells,\n  MAX(CASE WHEN lm.metric_key = 'coverage' THEN lm.metric_value END) as coverage,\n  MAX(CASE WHEN lm.metric_key = 'duplicated_lines_density' THEN lm.metric_value END) as duplication,\n  MAX(CASE WHEN lm.metric_key = 'ncloc' THEN lm.metric_value END) as lines_of_code,\n  ROUND((MAX(CASE WHEN lm.metric_key = 'sqale_index' THEN lm.metric_value END) / 60.0)::numeric, 1) as debt_hours\nFROM sonarqube_projects p\nLEFT JOIN latest_metrics lm ON p.project_key = lm.project_key AND lm.rn = 1\nGROUP BY p.project_name\nORDER BY lines_of_code DESC NULLS LAST;",
+              "refId": "A"
+            }
+          ],
+          "title": "All Projects Details",
+          "type": "table"
+        }
+      ],
+      "title": "All Projects (Expanded View)",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 },
+      "id": 105,
+      "panels": [
+        {
+          "datasource": { "type": "postgres" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": { "group": "A", "mode": "none" },
+                "thresholdsStyle": { "mode": "off" }
+              },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 46 },
+          "id": 16,
+          "options": {
+            "legend": { "calcs": ["last"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "postgres" },
+              "editorMode": "code",
+              "format": "time_series",
+              "rawQuery": true,
+              "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  p.project_name,\n  m.metric_value as value\nFROM sonarqube_metrics m\nJOIN sonarqube_projects p ON m.project_key = p.project_key\nWHERE m.metric_key = 'bugs'\n  AND $__timeFilter(m.recorded_at)\n  AND p.project_key IN (\n    SELECT project_key FROM (\n      SELECT project_key, SUM(metric_value) as total\n      FROM sonarqube_metrics \n      WHERE metric_key = 'bugs' AND recorded_at = (SELECT MAX(recorded_at) FROM sonarqube_metrics)\n      GROUP BY project_key ORDER BY total DESC LIMIT 10\n    ) top\n  )\nORDER BY time, p.project_name;",
+              "refId": "A"
+            }
+          ],
+          "title": "Bugs by Project (Top 10)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "postgres" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": { "group": "A", "mode": "none" },
+                "thresholdsStyle": { "mode": "off" }
+              },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 46 },
+          "id": 17,
+          "options": {
+            "legend": { "calcs": ["last"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "postgres" },
+              "editorMode": "code",
+              "format": "time_series",
+              "rawQuery": true,
+              "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  p.project_name,\n  m.metric_value as value\nFROM sonarqube_metrics m\nJOIN sonarqube_projects p ON m.project_key = p.project_key\nWHERE m.metric_key = 'coverage'\n  AND $__timeFilter(m.recorded_at)\n  AND p.project_key IN (\n    SELECT project_key FROM (\n      SELECT project_key, AVG(metric_value) as avg_cov\n      FROM sonarqube_metrics \n      WHERE metric_key = 'coverage' AND recorded_at = (SELECT MAX(recorded_at) FROM sonarqube_metrics)\n      GROUP BY project_key ORDER BY avg_cov ASC LIMIT 10\n    ) low\n  )\nORDER BY time, p.project_name;",
+              "refId": "A"
+            }
+          ],
+          "title": "Coverage by Project (Bottom 10)",
+          "type": "timeseries"
+        }
+      ],
+      "title": "Per-Project Breakdown",
+      "type": "row"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 46 },
+      "id": 106,
+      "panels": [],
+      "title": "SonarQube Coverage Gaps",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "orange", "value": 10 },
+              { "color": "red", "value": 25 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 47 },
+      "id": 18,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres"
-          },
+          "datasource": { "type": "postgres" },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT AVG(metric_value) as value\nFROM sonarqube_metrics\nWHERE metric_key = 'code_smells'\n  AND recorded_at = (SELECT MAX(recorded_at) FROM sonarqube_metrics);",
+          "rawSql": "SELECT COUNT(*) as value\nFROM repositories r\nWHERE NOT EXISTS (\n  SELECT 1 FROM sonarqube_projects sp \n  WHERE sp.project_key ILIKE '%' || r.slug || '%'\n     OR sp.project_name ILIKE '%' || r.slug || '%'\n);",
           "refId": "A"
         }
       ],
-      "title": "Current Avg Code Smells/Project",
+      "title": "Repos Without SonarQube",
+      "description": "Number of repositories not configured in SonarQube. These repos have no code quality visibility",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "postgres"
-      },
+      "datasource": { "type": "postgres" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
+          "color": { "mode": "thresholds" },
           "mappings": [],
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 15
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "calcs": ["last"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  AVG(metric_value) as \"Technical Debt (minutes)\"\nFROM sonarqube_metrics\nWHERE metric_key = 'sqale_index'\n  AND $__timeFilter(recorded_at)\nGROUP BY DATE(recorded_at)\nORDER BY time;",
-          "refId": "A"
-        }
-      ],
-      "title": "Average Technical Debt Over Time",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 50 },
+              { "color": "yellow", "value": 75 },
+              { "color": "green", "value": 90 }
             ]
           },
           "unit": "percent"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 15
-      },
-      "id": 9,
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 47 },
+      "id": 19,
       "options": {
-        "legend": {
-          "calcs": ["last"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres"
-          },
+          "datasource": { "type": "postgres" },
           "editorMode": "code",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  AVG(metric_value) as \"Duplicated Lines Density\"\nFROM sonarqube_metrics\nWHERE metric_key = 'duplicated_lines_density'\n  AND $__timeFilter(recorded_at)\nGROUP BY DATE(recorded_at)\nORDER BY time;",
+          "rawSql": "WITH repo_coverage AS (\n  SELECT r.org, r.slug,\n    CASE WHEN EXISTS (\n      SELECT 1 FROM sonarqube_projects sp \n      WHERE sp.project_key ILIKE '%' || r.slug || '%'\n         OR sp.project_name ILIKE '%' || r.slug || '%'\n    ) THEN 1 ELSE 0 END as has_sonar\n  FROM repositories r\n)\nSELECT ROUND((100.0 * SUM(has_sonar) / NULLIF(COUNT(*), 0))::numeric, 1) as value\nFROM repo_coverage;",
           "refId": "A"
         }
       ],
-      "title": "Average Duplicated Lines Over Time",
-      "type": "timeseries"
+      "title": "SonarQube Coverage",
+      "description": "Percentage of repositories that have SonarQube configured. Target: 100% for full visibility",
+      "type": "gauge"
     },
     {
-      "datasource": {
-        "type": "postgres"
-      },
+      "datasource": { "type": "postgres" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
+          "color": { "mode": "thresholds" },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
+              { "color": "blue", "value": null }
             ]
-          }
+          },
+          "unit": "short"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "bugs"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 5
-                    },
-                    {
-                      "color": "red",
-                      "value": 20
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "coverage"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "red",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 40
-                    },
-                    {
-                      "color": "green",
-                      "value": 80
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "unit",
-                "value": "percent"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "vulnerabilities"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 2
-                    },
-                    {
-                      "color": "red",
-                      "value": 10
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 24
-      },
-      "id": 10,
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 47 },
+      "id": 20,
       "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
-        },
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "bugs"
-          }
-        ]
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres"
-          },
+          "datasource": { "type": "postgres" },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH latest_metrics AS (\n  SELECT \n    project_key,\n    metric_key,\n    metric_value,\n    recorded_at,\n    ROW_NUMBER() OVER (PARTITION BY project_key, metric_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics\n)\nSELECT \n  p.project_name,\n  MAX(CASE WHEN lm.metric_key = 'bugs' THEN lm.metric_value END) as bugs,\n  MAX(CASE WHEN lm.metric_key = 'vulnerabilities' THEN lm.metric_value END) as vulnerabilities,\n  MAX(CASE WHEN lm.metric_key = 'code_smells' THEN lm.metric_value END) as code_smells,\n  MAX(CASE WHEN lm.metric_key = 'coverage' THEN lm.metric_value END) as coverage,\n  MAX(CASE WHEN lm.metric_key = 'ncloc' THEN lm.metric_value END) as lines_of_code\nFROM sonarqube_projects p\nLEFT JOIN latest_metrics lm ON p.project_key = lm.project_key AND lm.rn = 1\nGROUP BY p.project_name\nORDER BY bugs DESC NULLS LAST\nLIMIT 50;",
+          "rawSql": "SELECT COUNT(*) as value FROM repositories;",
           "refId": "A"
         }
       ],
-      "title": "Top 50 Projects by Bugs",
+      "title": "Total Repositories",
+      "description": "Total number of repositories in your organization from the repositories table",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 47 },
+      "id": 21,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) as value\nFROM repositories r\nWHERE EXISTS (\n  SELECT 1 FROM sonarqube_projects sp \n  WHERE sp.project_key ILIKE '%' || r.slug || '%'\n     OR sp.project_name ILIKE '%' || r.slug || '%'\n);",
+          "refId": "A"
+        }
+      ],
+      "title": "Repos With SonarQube",
+      "description": "Number of repositories that have matching SonarQube projects configured",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "orange", "value": null }] }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "org" }, "properties": [{ "id": "custom.width", "value": 150 }] },
+          { "matcher": { "id": "byName", "options": "slug" }, "properties": [{ "id": "custom.width", "value": 250 }] }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 52 },
+      "id": 22,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": false, "displayName": "org" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT r.org, r.slug, COALESCE(r.language, 'unknown') as language\nFROM repositories r\nWHERE NOT EXISTS (\n  SELECT 1 FROM sonarqube_projects sp \n  WHERE sp.project_key ILIKE '%' || r.slug || '%'\n     OR sp.project_name ILIKE '%' || r.slug || '%'\n)\nORDER BY r.org, r.slug;",
+          "refId": "A"
+        }
+      ],
+      "title": "Repos Missing SonarQube",
+      "description": "List of repositories without SonarQube configuration. Consider adding these to gain code quality visibility",
       "type": "table"
     }
   ],
-  "refresh": "",
+  "refresh": "1h",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["sonarqube", "code-quality"],
+  "tags": ["sonarqube", "code-quality", "engineering"],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "datasource": { "type": "postgres" },
+        "definition": "SELECT project_name FROM sonarqube_projects ORDER BY project_name",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Project",
+        "multi": true,
+        "name": "project",
+        "options": [],
+        "query": "SELECT project_name FROM sonarqube_projects ORDER BY project_name",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
   },
-  "time": {
-    "from": "now-30d",
-    "to": "now"
+  "time": { "from": "now-30d", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["5m", "15m", "30m", "1h", "2h", "1d"]
   },
-  "timepicker": {},
   "timezone": "",
-  "title": "SonarQube Code Quality Metrics",
+  "title": "SonarQube - Engineering Manager View",
   "uid": "sonarqube-metrics",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
