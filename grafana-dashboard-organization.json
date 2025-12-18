@@ -92,7 +92,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total PRs (Selected Period)",
+      "title": "Total PRs",
+      "description": "Total number of pull requests created across the organization in the selected time period",
       "type": "stat"
     },
     {
@@ -167,7 +168,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total Merged PRs (Selected Period)",
+      "title": "Merged PRs",
+      "description": "Total number of pull requests successfully merged across the organization",
       "type": "stat"
     },
     {
@@ -189,15 +191,15 @@
               },
               {
                 "color": "yellow",
-                "value": 3600
-              },
-              {
-                "color": "orange",
                 "value": 86400
               },
               {
-                "color": "red",
+                "color": "orange",
                 "value": 259200
+              },
+              {
+                "color": "red",
+                "value": 604800
               }
             ]
           },
@@ -220,7 +222,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -238,11 +240,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.merged_at) as time,\n  AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))) as \"Average Lead Time (seconds)\"\nFROM prs pr\nWHERE pr.repository_owner = '$organization'\n  AND pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))) as \"Average Lead Time (seconds)\"\nFROM prs pr\nWHERE pr.repository_owner = '$organization'\n  AND pr.state = 'MERGED'\n  AND pr.merged_at >= $__timeFrom()::timestamp\n  AND pr.merged_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg Lead Time (Selected Period)",
+      "title": "Avg Lead Time",
+      "description": "Average time from PR creation to merge across all repositories. Key DORA metric for organization-level delivery performance",
       "type": "stat"
     },
     {
@@ -305,7 +308,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total Additions (Selected Period)",
+      "title": "Lines Added",
+      "description": "Total lines of code added across all organization repositories",
       "type": "stat"
     },
     {
@@ -368,7 +372,8 @@
           "refId": "A"
         }
       ],
-      "title": "Total Deletions (Selected Period)",
+      "title": "Lines Removed",
+      "description": "Total lines of code removed across all organization repositories. High deletions indicate healthy code hygiene",
       "type": "stat"
     },
     {
@@ -443,7 +448,8 @@
           "refId": "A"
         }
       ],
-      "title": "Active Repositories",
+      "title": "Active Repos",
+      "description": "Number of repositories with at least one PR created in the selected time period",
       "type": "stat"
     },
     {
@@ -512,7 +518,8 @@
           "refId": "A"
         }
       ],
-      "title": "Programming Languages (by Repository Count)",
+      "title": "Languages by Repository",
+      "description": "Distribution of programming languages across active repositories in the organization",
       "transformations": [],
       "type": "piechart"
     },
@@ -582,7 +589,8 @@
           "refId": "A"
         }
       ],
-      "title": "Programming Languages (by PR Count)",
+      "title": "Languages by PR Volume",
+      "description": "Distribution of programming languages by number of PRs. Shows where most development effort is focused organization-wide",
       "transformations": [],
       "type": "piechart"
     },
@@ -719,7 +727,8 @@
           "refId": "B"
         }
       ],
-      "title": "Daily Pull Requests Over Time",
+      "title": "PR Activity Over Time",
+      "description": "Daily PR creation and merge activity across the organization. Identify trends and seasonality",
       "type": "timeseries"
     },
     {
@@ -826,11 +835,12 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH repo_metrics AS (\n  SELECT\n    pr.repository_name as \"Repository\",\n    COUNT(*) as \"PRs\",\n    ROUND(AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) / 86400)::numeric, 1) as \"Avg Lead Time (days)\",\n    ROUND(AVG(pr.additions + pr.deletions)) as \"Avg PR Size\",\n    COUNT(CASE WHEN pr.state = 'MERGED' THEN 1 END) as \"Merged PRs\"\n  FROM prs pr\n  WHERE pr.repository_owner = '$organization'\n    AND pr.created_at >= $__timeFrom()::timestamp\n    AND pr.created_at <= $__timeTo()::timestamp\n    AND pr.state = 'MERGED'\n  GROUP BY pr.repository_name\n)\nSELECT *\nFROM repo_metrics\nWHERE \"Avg Lead Time (days)\" > 3 OR \"Avg PR Size\" > 500\nORDER BY \"Avg Lead Time (days)\" DESC NULLS LAST, \"Avg PR Size\" DESC",
+          "rawSql": "WITH repo_metrics AS (\n  SELECT\n    pr.repository_name as \"Repository\",\n    COUNT(*) as \"PRs\",\n    ROUND((AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))) / 86400)::numeric, 1) as \"Avg Lead Time (days)\",\n    ROUND(AVG(pr.additions + pr.deletions)::numeric) as \"Avg PR Size\",\n    COUNT(CASE WHEN pr.state = 'MERGED' THEN 1 END) as \"Merged PRs\"\n  FROM prs pr\n  WHERE pr.repository_owner = '$organization'\n    AND pr.created_at >= $__timeFrom()::timestamp\n    AND pr.created_at <= $__timeTo()::timestamp\n    AND pr.state = 'MERGED'\n  GROUP BY pr.repository_name\n)\nSELECT *\nFROM repo_metrics\nWHERE \"Avg Lead Time (days)\" > 3 OR \"Avg PR Size\" > 500\nORDER BY \"Avg Lead Time (days)\" DESC NULLS LAST, \"Avg PR Size\" DESC",
           "refId": "A"
         }
       ],
-      "title": "Problematic Repositories (High Lead Time or Large PRs)",
+      "title": "Repositories Needing Attention",
+      "description": "Repositories with lead time >3 days or average PR size >500 lines. Consider process improvements for these repos",
       "type": "table"
     },
     {
@@ -912,11 +922,12 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, SUM(pr.additions + pr.deletions) DESC) as \"#\",\n  pr.repository_name as \"Repository\",\n  COUNT(*) as \"PRs\",\n  SUM(pr.additions) as \"Total Additions\",\n  SUM(pr.deletions) as \"Total Deletions\",\n  SUM(pr.additions + pr.deletions) as \"Total Changes\",\n  ROUND(AVG(pr.additions + pr.deletions)) as \"Avg Changes\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) <= 100 THEN 1 END) as \"Small\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 100 AND (pr.additions + pr.deletions) <= 500 THEN 1 END) as \"Medium\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 500 THEN 1 END) as \"Large\"\nFROM prs pr\nWHERE pr.repository_owner = '$organization'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY pr.repository_name\nORDER BY \"PRs\" DESC, \"Total Changes\" DESC\nLIMIT 50",
+          "rawSql": "SELECT\n  ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, SUM(pr.additions + pr.deletions) DESC) as \"#\",\n  pr.repository_name as \"Repository\",\n  COUNT(*) as \"PRs\",\n  SUM(pr.additions) as \"Total Additions\",\n  SUM(pr.deletions) as \"Total Deletions\",\n  SUM(pr.additions + pr.deletions) as \"Total Changes\",\n  ROUND(AVG(pr.additions + pr.deletions)::numeric) as \"Avg Changes\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) <= 100 THEN 1 END) as \"Small\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 100 AND (pr.additions + pr.deletions) <= 500 THEN 1 END) as \"Medium\",\n  COUNT(CASE WHEN (pr.additions + pr.deletions) > 500 THEN 1 END) as \"Large\"\nFROM prs pr\nWHERE pr.repository_owner = '$organization'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY pr.repository_name\nORDER BY \"PRs\" DESC, \"Total Changes\" DESC\nLIMIT 50",
           "refId": "A"
         }
       ],
-      "title": "Repository Statistics (Selected Period)",
+      "title": "Repository Statistics",
+      "description": "Detailed PR metrics per repository showing activity, code volume, and PR size distribution",
       "type": "table"
     }
   ],
