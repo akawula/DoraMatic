@@ -78,7 +78,7 @@ func Get(ghClient client.GitHubV4Client, org string, repo string, lastDBDate tim
 					HasNextPage githubv4.Boolean
 					EndCursor   githubv4.String
 				}
-			} `graphql:"pullRequests(first:15, orderBy: {field: CREATED_AT, direction: DESC}, states: [MERGED, OPEN], after: $after)"`
+			} `graphql:"pullRequests(first:15, orderBy: {field: CREATED_AT, direction: DESC}, states: [MERGED, OPEN, CLOSED], after: $after)"`
 		} `graphql:"repository(name: $name, owner: $login)"`
 	}
 
