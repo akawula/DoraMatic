@@ -22,6 +22,7 @@ type SinglePeriodStats struct {
 	CommitsCount                  int     `json:"commits_count"`
 	MergedPRsCount                int     `json:"merged_prs_count"`
 	ClosedPRsCount                int     `json:"closed_prs_count"`
+	AvgTimeToCloseSeconds         float64 `json:"avg_time_to_close_seconds"`
 	RollbacksCount                int     `json:"rollbacks_count"`
 	AvgLeadTimeToCodeSeconds      float64 `json:"avg_lead_time_to_code_seconds"`
 	CountPRsForAvgLeadTime        int     `json:"count_prs_for_avg_lead_time"`
@@ -158,11 +159,10 @@ func GetTeamStatsHandler(store store.Store) http.HandlerFunc { //nolint:maintidx
 
 		// Define keys for trend data (must match frontend)
 		trendStatKeys := []string{
-			"merged_prs_count", "closed_prs_count", "commits_count", "rollbacks_count",
+			"merged_prs_count", "closed_prs_count", "avg_time_to_close_seconds", "commits_count", "rollbacks_count",
 			"avg_lead_time_to_code_seconds", "avg_lead_time_to_review_seconds", "avg_lead_time_to_merge_seconds", "avg_time_to_first_actual_review_seconds",
-			"avg_reviews_requested_per_pr", // New trend key
+			"avg_reviews_requested_per_pr",
 			"avg_pr_size_lines", "change_failure_rate_percentage", "avg_commits_per_merged_pr",
-			// "avg_reviews_per_user" removed, trend for QuietHeroName/Stat not added for now
 		}
 
 		for _, key := range trendStatKeys {
@@ -177,6 +177,8 @@ func GetTeamStatsHandler(store store.Store) http.HandlerFunc { //nolint:maintidx
 					values[j] = float64(pStats.MergedPRsCount)
 				case "closed_prs_count":
 					values[j] = float64(pStats.ClosedPRsCount)
+				case "avg_time_to_close_seconds":
+					values[j] = pStats.AvgTimeToCloseSeconds
 				case "commits_count":
 					values[j] = float64(pStats.CommitsCount)
 				case "rollbacks_count":
@@ -409,6 +411,7 @@ func fetchStatsForPeriod(ctx context.Context, store store.Store, teamName string
 		CommitsCount:                  int(commitCount),
 		MergedPRsCount:                int(otherPrStats.MergedCount),
 		ClosedPRsCount:                int(otherPrStats.ClosedCount),
+		AvgTimeToCloseSeconds:         otherPrStats.AvgTimeToCloseSeconds,
 		RollbacksCount:                int(otherPrStats.RollbacksCount),
 		AvgLeadTimeToCodeSeconds:      avgLeadTimeToCodeSeconds,
 		CountPRsForAvgLeadTime:        countLeadTimeToCode,

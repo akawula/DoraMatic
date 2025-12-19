@@ -36,6 +36,7 @@ type PullRequest struct {
 	State     githubv4.String
 	Url       githubv4.String
 	MergedAt  githubv4.String
+	ClosedAt  githubv4.String
 	CreatedAt githubv4.String
 	Additions githubv4.Int
 	Deletions githubv4.Int

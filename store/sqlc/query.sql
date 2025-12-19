@@ -30,16 +30,17 @@ LIMIT 1;
 
 -- name: UpsertPullRequest :exec
 INSERT INTO prs (
-    id, title, state, url, merged_at, created_at, additions, deletions,
+    id, title, state, url, merged_at, closed_at, created_at, additions, deletions,
     branch_name, author, repository_name, repository_owner,
     review_requested_at, reviews_requested
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 ) ON CONFLICT (id)
 DO UPDATE SET
     title = EXCLUDED.title,
     state = EXCLUDED.state,
     merged_at = EXCLUDED.merged_at,
+    closed_at = EXCLUDED.closed_at,
     additions = EXCLUDED.additions,
     deletions = EXCLUDED.deletions,
     review_requested_at = EXCLUDED.review_requested_at,
@@ -151,7 +152,15 @@ TeamMemberReviewStats AS (
 )
 SELECT
     COUNT(CASE WHEN p.state = 'MERGED' AND p.merged_at >= sqlc.arg(start_date)::timestamptz AND p.merged_at <= sqlc.arg(end_date)::timestamptz THEN 1 END)::int AS merged_count,
-    COUNT(CASE WHEN p.state = 'CLOSED' AND p.created_at >= sqlc.arg(start_date)::timestamptz AND p.created_at <= sqlc.arg(end_date)::timestamptz THEN 1 END)::int AS closed_count,
+    COUNT(CASE WHEN p.state = 'CLOSED' AND p.closed_at >= sqlc.arg(start_date)::timestamptz AND p.closed_at <= sqlc.arg(end_date)::timestamptz THEN 1 END)::int AS closed_count,
+    -- Calculate average time from creation to close for closed (not merged) PRs
+    COALESCE(AVG(
+        CASE
+            WHEN p.state = 'CLOSED' AND p.closed_at IS NOT NULL AND p.closed_at >= sqlc.arg(start_date)::timestamptz AND p.closed_at <= sqlc.arg(end_date)::timestamptz
+            THEN EXTRACT(EPOCH FROM (p.closed_at - p.created_at))
+            ELSE NULL
+        END
+    ), 0)::float AS avg_time_to_close_seconds,
     COUNT(CASE WHEN p.state = 'MERGED' AND p.merged_at >= sqlc.arg(start_date)::timestamptz AND p.merged_at <= sqlc.arg(end_date)::timestamptz AND p.title LIKE 'Revert %' THEN 1 END)::int AS rollbacks_count,
     -- Calculate average lead time to first review request in seconds
     COALESCE(AVG(
@@ -226,7 +235,7 @@ WHERE t.team = sqlc.arg(team_name)
   AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[])) -- Filter by selected members
   AND (
        (p.state = 'MERGED' AND p.merged_at >= sqlc.arg(start_date)::timestamptz AND p.merged_at <= sqlc.arg(end_date)::timestamptz) OR
-       (p.state = 'CLOSED' AND p.created_at >= sqlc.arg(start_date)::timestamptz AND p.created_at <= sqlc.arg(end_date)::timestamptz)
+       (p.state = 'CLOSED' AND p.closed_at >= sqlc.arg(start_date)::timestamptz AND p.closed_at <= sqlc.arg(end_date)::timestamptz)
       );
 
 -- name: GetTeamMemberReviewStatsByDateRange :many
@@ -632,6 +641,7 @@ ForeignPRs AS (
         p.created_at,
         p.review_requested_at,
         p.merged_at,
+        p.closed_at,
         p.state
     FROM prs p
     JOIN AuthorTeamSlugs ats ON ats.pr_id = p.id
@@ -646,6 +656,7 @@ SELECT
     fp.team,
     COUNT(*) FILTER (WHERE fp.state = 'OPEN')::int as open_foreign_prs,
     COUNT(*) FILTER (WHERE fp.state = 'MERGED')::int as merged_foreign_prs,
+    COUNT(*) FILTER (WHERE fp.state = 'CLOSED')::int as closed_foreign_prs,
     COALESCE(AVG(
         CASE
             WHEN fp.state = 'MERGED' AND fp.merged_at IS NOT NULL AND fp.review_requested_at IS NOT NULL

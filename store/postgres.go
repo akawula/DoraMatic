@@ -230,6 +230,16 @@ func (p *Postgres) SavePullRequest(ctx context.Context, prs []pullrequests.PullR
 			}
 		}
 
+		var closedAt pgtype.Timestamptz
+		if pr.ClosedAt != "" {
+			t, parseErr := time.Parse(time.RFC3339, string(pr.ClosedAt))
+			if parseErr == nil {
+				closedAt = pgtype.Timestamptz{Time: t, Valid: true}
+			} else {
+				p.Logger.Warn("Failed to parse closed_at", "value", pr.ClosedAt, "error", parseErr)
+			}
+		}
+
 		createdAt, parseErr := time.Parse(time.RFC3339, string(pr.CreatedAt)) // Cast githubv4.String
 		if parseErr != nil {
 			p.Logger.Error("Failed to parse created_at, skipping PR", "pr_id", string(pr.Id), "value", string(pr.CreatedAt), "error", parseErr) // Cast Id and CreatedAt for logging
@@ -246,6 +256,7 @@ func (p *Postgres) SavePullRequest(ctx context.Context, prs []pullrequests.PullR
 			State:             pgtype.Text{String: string(pr.State), Valid: pr.State != ""},                                   // pgtype.Text
 			Url:               sql.NullString{String: string(pr.Url), Valid: pr.Url != ""},                                    // sql.NullString
 			MergedAt:          mergedAt,                                                                                       // pgtype.Timestamptz
+			ClosedAt:          closedAt,                                                                                       // pgtype.Timestamptz
 			CreatedAt:         pgCreatedAt.Time,                                                                               // time.Time
 			Additions:         pgtype.Int4{Int32: int32(pr.Additions), Valid: true},                                           // pgtype.Int4
 			Deletions:         pgtype.Int4{Int32: int32(pr.Deletions), Valid: true},                                           // pgtype.Int4

@@ -132,12 +132,13 @@ function StatsGrid({ stats, loadingStats, selectedTeam, startDate, endDate }) {
         let color = "success"; // Default to green if up is good
         if (
           label === "Closed PRs (Not Merged)" ||
+          label === "Avg Time to Close" ||
           label === "Rollbacks" ||
           label === "Avg lead time to code" ||
           label === "Avg Lead Time to Review" ||
           label === "Avg Lead Time to Merge" ||
           label === "Avg. Time to First Actual Review" ||
-          label === "Avg Reviews Requested / PR" || // Changed metric
+          label === "Avg Reviews Requested / PR" ||
           label === "Avg PR Size (Lines)" ||
           label === "Change Failure Rate"
         ) {
@@ -173,12 +174,13 @@ function StatsGrid({ stats, loadingStats, selectedTeam, startDate, endDate }) {
           color = "success"; // Green if trending up is good
           break;
         case "Closed PRs (Not Merged)":
+        case "Avg Time to Close":
         case "Rollbacks":
         case "Avg lead time to code":
         case "Avg Lead Time to Review":
         case "Avg Lead Time to Merge":
         case "Avg. Time to First Actual Review":
-        case "Avg Reviews Requested / PR": // Changed metric
+        case "Avg Reviews Requested / PR":
         case "Avg PR Size (Lines)":
         case "Change Failure Rate":
           color = "danger"; // Red if trending up is bad
@@ -196,12 +198,13 @@ function StatsGrid({ stats, loadingStats, selectedTeam, startDate, endDate }) {
           color = "danger"; // Red if trending down is bad
           break;
         case "Closed PRs (Not Merged)":
+        case "Avg Time to Close":
         case "Rollbacks":
         case "Avg lead time to code":
         case "Avg Lead Time to Review":
         case "Avg Lead Time to Merge":
         case "Avg. Time to First Actual Review":
-        case "Avg Reviews Requested / PR": // Changed metric
+        case "Avg Reviews Requested / PR":
         case "Avg PR Size (Lines)":
         case "Change Failure Rate":
           color = "success"; // Green if trending down is good
@@ -225,11 +228,25 @@ function StatsGrid({ stats, loadingStats, selectedTeam, startDate, endDate }) {
       isLeadTime: false,
     },
     {
-      label: "Avg Reviews Requested / PR", // Changed label
-      current: stats.current?.avg_reviews_requested_per_pr, // Changed data key
-      previous: stats.previous?.avg_reviews_requested_per_pr, // Changed data key
-      trendKey: "avg_reviews_requested_per_pr", // Changed trend key
-      isLeadTime: false, // This is a count, not a lead time
+      label: "Closed PRs (Not Merged)",
+      current: stats.current?.closed_prs_count,
+      previous: stats.previous?.closed_prs_count,
+      trendKey: "closed_prs_count",
+      isLeadTime: false,
+    },
+    {
+      label: "Avg Time to Close",
+      current: stats.current?.avg_time_to_close_seconds,
+      previous: stats.previous?.avg_time_to_close_seconds,
+      trendKey: "avg_time_to_close_seconds",
+      isLeadTime: true,
+    },
+    {
+      label: "Avg Reviews Requested / PR",
+      current: stats.current?.avg_reviews_requested_per_pr,
+      previous: stats.previous?.avg_reviews_requested_per_pr,
+      trendKey: "avg_reviews_requested_per_pr",
+      isLeadTime: false,
     },
     {
       label: "Total Commits",
