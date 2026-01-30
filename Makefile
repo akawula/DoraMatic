@@ -8,6 +8,13 @@ DOCKER_IMAGE_SONARQUBE=${DOCKER_REGISTRY_USER}/${DOCKER_IMAGE_BASE_NAME}:sonarqu
 
 PLATFORM?=linux/arm64
 
+# Local development database settings
+LOCAL_DB_CONTAINER_NAME=doramatic-postgres-local
+LOCAL_DB_USER=doramatic
+LOCAL_DB_PASSWORD=doramatic
+LOCAL_DB_NAME=doramatic
+LOCAL_DB_PORT=5432
+
 .PHONY: help
 help:
 	@echo "Available commands:"
@@ -206,3 +213,95 @@ db-restore: ## Restore the PostgreSQL database to the Kubernetes pod from a back
 	echo "Cleaning up backup file from pod..."; \
 	kubectl exec $$POD_NAME -- rm $$TMP_BACKUP_PATH; \
 	echo "Database restore completed."
+
+# --- Local Development ---
+
+local-db-start: ## Start local PostgreSQL database in Docker
+	@echo "Starting local PostgreSQL database..."
+	@if docker ps -a --format '{{.Names}}' | grep -q '^$(LOCAL_DB_CONTAINER_NAME)$$'; then \
+		echo "Container exists, starting it..."; \
+		docker start $(LOCAL_DB_CONTAINER_NAME); \
+	else \
+		echo "Creating new container..."; \
+		docker run -d \
+			--name $(LOCAL_DB_CONTAINER_NAME) \
+			-e POSTGRES_USER=$(LOCAL_DB_USER) \
+			-e POSTGRES_PASSWORD=$(LOCAL_DB_PASSWORD) \
+			-e POSTGRES_DB=$(LOCAL_DB_NAME) \
+			-p $(LOCAL_DB_PORT):5432 \
+			postgres:15; \
+	fi
+	@echo "Waiting for PostgreSQL to be ready..."
+	@sleep 3
+	@until docker exec $(LOCAL_DB_CONTAINER_NAME) pg_isready -U $(LOCAL_DB_USER) -d $(LOCAL_DB_NAME) > /dev/null 2>&1; do \
+		echo "Waiting for database..."; \
+		sleep 1; \
+	done
+	@echo "Local PostgreSQL is ready on localhost:$(LOCAL_DB_PORT)"
+
+local-db-stop: ## Stop local PostgreSQL database
+	@echo "Stopping local PostgreSQL database..."
+	@docker stop $(LOCAL_DB_CONTAINER_NAME) || true
+	@echo "Local database stopped."
+
+local-db-remove: ## Stop and remove local PostgreSQL database (deletes all data!)
+	@echo "Removing local PostgreSQL database..."
+	@docker stop $(LOCAL_DB_CONTAINER_NAME) || true
+	@docker rm $(LOCAL_DB_CONTAINER_NAME) || true
+	@echo "Local database removed."
+
+local-db-logs: ## View logs from local PostgreSQL database
+	@docker logs -f $(LOCAL_DB_CONTAINER_NAME)
+
+local-db-shell: ## Open psql shell to local database
+	@docker exec -it $(LOCAL_DB_CONTAINER_NAME) psql -U $(LOCAL_DB_USER) -d $(LOCAL_DB_NAME)
+
+local-db-ui: ## Open lazysql TUI for local database (requires: brew install lazysql)
+	@lazysql "postgres://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@localhost:$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)?sslmode=disable"
+
+db-ui: ## Open lazysql TUI using current env vars (for remote/k8s database)
+	@if [ -z "$(POSTGRES_USER)" ] || [ -z "$(POSTGRES_PASSWORD)" ] || [ -z "$(POSTGRES_SERVICE_HOST)" ] || [ -z "$(POSTGRES_SERVICE_PORT)" ] || [ -z "$(POSTGRES_DB)" ]; then \
+		echo "Error: Database env vars not set. Run 'make local-env' or set them manually."; \
+		exit 1; \
+	fi
+	@lazysql "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_SERVICE_HOST):$(POSTGRES_SERVICE_PORT)/$(POSTGRES_DB)?sslmode=disable"
+
+local-env: ## Print environment variables for local development
+	@echo "Run these commands to set up your local environment:"
+	@echo ""
+	@echo "export POSTGRES_USER=$(LOCAL_DB_USER)"
+	@echo "export POSTGRES_PASSWORD=$(LOCAL_DB_PASSWORD)"
+	@echo "export POSTGRES_DB=$(LOCAL_DB_NAME)"
+	@echo "export POSTGRES_SERVICE_HOST=localhost"
+	@echo "export POSTGRES_SERVICE_PORT=$(LOCAL_DB_PORT)"
+	@echo ""
+	@echo "Or copy-paste this one-liner:"
+	@echo "export POSTGRES_USER=$(LOCAL_DB_USER) POSTGRES_PASSWORD=$(LOCAL_DB_PASSWORD) POSTGRES_DB=$(LOCAL_DB_NAME) POSTGRES_SERVICE_HOST=localhost POSTGRES_SERVICE_PORT=$(LOCAL_DB_PORT)"
+
+local-dev-start: local-db-start ## Start local development environment (database + migrations)
+	@echo ""
+	@echo "Setting up local environment variables..."
+	@export POSTGRES_USER=$(LOCAL_DB_USER) && \
+	export POSTGRES_PASSWORD=$(LOCAL_DB_PASSWORD) && \
+	export POSTGRES_DB=$(LOCAL_DB_NAME) && \
+	export POSTGRES_SERVICE_HOST=localhost && \
+	export POSTGRES_SERVICE_PORT=$(LOCAL_DB_PORT) && \
+	echo "Applying database migrations..." && \
+	$(HOME)/go/bin/migrate -database 'postgres://$(LOCAL_DB_USER):$(LOCAL_DB_PASSWORD)@localhost:$(LOCAL_DB_PORT)/$(LOCAL_DB_NAME)?sslmode=disable' -path migrations up
+	@echo ""
+	@echo "============================================"
+	@echo "Local development environment is ready!"
+	@echo "============================================"
+	@echo ""
+	@echo "Run this to set your shell environment:"
+	@echo ""
+	@echo "  export POSTGRES_USER=$(LOCAL_DB_USER) POSTGRES_PASSWORD=$(LOCAL_DB_PASSWORD) POSTGRES_DB=$(LOCAL_DB_NAME) POSTGRES_SERVICE_HOST=localhost POSTGRES_SERVICE_PORT=$(LOCAL_DB_PORT)"
+	@echo ""
+	@echo "Then run the cronjob with:"
+	@echo "  make run-cron"
+	@echo ""
+	@echo "Or run the API server with:"
+	@echo "  make run-server"
+	@echo ""
+
+local-dev-stop: local-db-stop ## Stop local development environment
