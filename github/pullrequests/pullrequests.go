@@ -31,15 +31,17 @@ type Review struct {
 }
 
 type PullRequest struct {
-	Id        githubv4.String
-	Title     githubv4.String
-	State     githubv4.String
-	Url       githubv4.String
-	MergedAt  githubv4.String
-	ClosedAt  githubv4.String
-	CreatedAt githubv4.String
-	Additions githubv4.Int
-	Deletions githubv4.Int
+	Id           githubv4.String
+	Number       githubv4.Int // PR number for REST API calls
+	Title        githubv4.String
+	State        githubv4.String
+	Url          githubv4.String
+	MergedAt     githubv4.String
+	ClosedAt     githubv4.String
+	CreatedAt    githubv4.String
+	Additions    githubv4.Int
+	Deletions    githubv4.Int
+	ChangedFiles githubv4.Int // Number of files changed in the PR
 
 	HeadRefName githubv4.String
 	Author      struct {

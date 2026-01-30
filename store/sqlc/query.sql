@@ -32,9 +32,10 @@ LIMIT 1;
 INSERT INTO prs (
     id, title, state, url, merged_at, closed_at, created_at, additions, deletions,
     branch_name, author, repository_name, repository_owner,
-    review_requested_at, reviews_requested
+    review_requested_at, reviews_requested, changed_files, generated_additions,
+    generated_deletions, files_complete
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
 ) ON CONFLICT (id)
 DO UPDATE SET
     title = EXCLUDED.title,
@@ -44,7 +45,11 @@ DO UPDATE SET
     additions = EXCLUDED.additions,
     deletions = EXCLUDED.deletions,
     review_requested_at = EXCLUDED.review_requested_at,
-    reviews_requested = EXCLUDED.reviews_requested;
+    reviews_requested = EXCLUDED.reviews_requested,
+    changed_files = EXCLUDED.changed_files,
+    generated_additions = EXCLUDED.generated_additions,
+    generated_deletions = EXCLUDED.generated_deletions,
+    files_complete = EXCLUDED.files_complete;
 
 
 -- Commits --
@@ -712,3 +717,100 @@ AND p.created_at <= sqlc.arg(end_date)::timestamptz
 GROUP BY ro.team_slug
 HAVING COUNT(DISTINCT p.id) > 0
 ORDER BY pending_reviews DESC, avg_time_to_first_review_seconds DESC;
+
+
+-- Pull Request Files (Generated Code Tracking) --
+
+-- name: UpsertPullRequestFile :exec
+INSERT INTO pull_request_files (
+    pull_request_id, file_path, additions, deletions, status, is_generated
+) VALUES (
+    $1, $2, $3, $4, $5, $6
+) ON CONFLICT (pull_request_id, file_path)
+DO UPDATE SET
+    additions = EXCLUDED.additions,
+    deletions = EXCLUDED.deletions,
+    status = EXCLUDED.status,
+    is_generated = EXCLUDED.is_generated;
+
+-- name: GetPullRequestFiles :many
+SELECT id, pull_request_id, file_path, additions, deletions, status, is_generated, created_at
+FROM pull_request_files
+WHERE pull_request_id = $1
+ORDER BY file_path;
+
+-- name: DeletePullRequestFiles :exec
+DELETE FROM pull_request_files WHERE pull_request_id = $1;
+
+-- name: UpdatePRGeneratedStats :exec
+UPDATE prs SET
+    changed_files = $2,
+    generated_additions = $3,
+    generated_deletions = $4,
+    files_complete = $5
+WHERE id = $1;
+
+-- name: GetPRsWithIncompleteFiles :many
+SELECT id, url, title, repository_name, repository_owner, author, state, 
+       changed_files, additions, deletions, created_at, merged_at
+FROM prs
+WHERE files_complete = false
+ORDER BY changed_files DESC;
+
+
+-- Team Statistics with Generated Code Metrics --
+
+-- name: GetTeamGeneratedCodeStatsByDateRange :one
+SELECT
+    COUNT(CASE WHEN p.state = 'MERGED' THEN 1 END)::int AS merged_count,
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' THEN p.additions ELSE 0 END), 0)::bigint AS total_additions,
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' THEN p.deletions ELSE 0 END), 0)::bigint AS total_deletions,
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' THEN COALESCE(p.generated_additions, 0) ELSE 0 END), 0)::bigint AS generated_additions,
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' THEN COALESCE(p.generated_deletions, 0) ELSE 0 END), 0)::bigint AS generated_deletions,
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' THEN p.additions - COALESCE(p.generated_additions, 0) ELSE 0 END), 0)::bigint AS human_additions,
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' THEN p.deletions - COALESCE(p.generated_deletions, 0) ELSE 0 END), 0)::bigint AS human_deletions,
+    COALESCE(SUM(CASE WHEN p.state = 'MERGED' THEN COALESCE(p.changed_files, 0) ELSE 0 END), 0)::bigint AS total_files_changed,
+    COUNT(CASE WHEN p.state = 'MERGED' AND p.files_complete = false THEN 1 END)::int AS prs_with_incomplete_files
+FROM prs p
+JOIN teams t ON p.author = t.member
+WHERE t.team = sqlc.arg(team_name)
+  AND (sqlc.arg(members)::text[] IS NULL OR p.author = ANY(sqlc.arg(members)::text[]))
+  AND p.state = 'MERGED'
+  AND p.merged_at >= sqlc.arg(start_date)::timestamptz
+  AND p.merged_at <= sqlc.arg(end_date)::timestamptz;
+
+
+-- name: GetTopGeneratedFilePatterns :many
+SELECT
+    -- Extract the file extension or directory pattern
+    CASE
+        WHEN file_path LIKE '%.pb.go' THEN '*.pb.go (protobuf)'
+        WHEN file_path LIKE '%_pb2.py' THEN '*_pb2.py (protobuf)'
+        WHEN file_path LIKE '%_generated.%' THEN '*_generated.* (generated)'
+        WHEN file_path LIKE '%.gen.%' THEN '*.gen.* (generated)'
+        WHEN file_path LIKE 'vendor/%' THEN 'vendor/* (vendored)'
+        WHEN file_path LIKE '%/mocks/%' THEN '*/mocks/* (mocks)'
+        WHEN file_path LIKE '%.min.js' THEN '*.min.js (minified)'
+        WHEN file_path LIKE '%.min.css' THEN '*.min.css (minified)'
+        WHEN file_path LIKE 'package-lock.json' THEN 'package-lock.json'
+        WHEN file_path LIKE 'go.sum' THEN 'go.sum'
+        ELSE 'other'
+    END AS pattern,
+    COUNT(*) AS file_count,
+    SUM(additions)::bigint AS total_additions,
+    SUM(deletions)::bigint AS total_deletions
+FROM pull_request_files prf
+JOIN prs p ON prf.pull_request_id = p.id
+JOIN teams t ON p.author = t.member
+WHERE t.team = sqlc.arg(team_name)
+  AND prf.is_generated = true
+  AND p.state = 'MERGED'
+  AND p.merged_at >= sqlc.arg(start_date)::timestamptz
+  AND p.merged_at <= sqlc.arg(end_date)::timestamptz
+GROUP BY pattern
+ORDER BY total_additions DESC
+LIMIT 10;
+
+
+-- NOTE: ListPullRequestsWithoutJiraReferencesWithPagination and CountPullRequestsWithoutJiraReferences
+-- are manually implemented in jira_params.go to handle the pagination params with custom types

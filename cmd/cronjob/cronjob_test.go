@@ -237,6 +237,23 @@ func (m *MockStore) SaveRepositoryOwners(ctx context.Context, ownerships []codeo
 	return nil // Default mock behavior
 }
 
+// Implement generated code tracking methods for MockStore
+func (m *MockStore) SavePullRequestFiles(ctx context.Context, prID string, files []store.PRFileChange, generatedAdditions, generatedDeletions int, filesComplete bool) error {
+	return nil
+}
+
+func (m *MockStore) UpdatePRFilesIncomplete(ctx context.Context, prID string, changedFiles int) error {
+	return nil
+}
+
+func (m *MockStore) GetTeamGeneratedCodeStats(ctx context.Context, arg sqlc.GetTeamGeneratedCodeStatsByDateRangeParams) (sqlc.GetTeamGeneratedCodeStatsByDateRangeRow, error) {
+	return sqlc.GetTeamGeneratedCodeStatsByDateRangeRow{}, nil
+}
+
+func (m *MockStore) GetPRsWithIncompleteFiles(ctx context.Context) ([]sqlc.GetPRsWithIncompleteFilesRow, error) {
+	return []sqlc.GetPRsWithIncompleteFilesRow{}, nil
+}
+
 // Mock function types for GitHub interactions
 // Updated MockGetTeamsFunc signature
 type MockGetTeamsFunc func(ghClient client.GitHubV4Client) (map[string][]organizations.MemberInfo, error)
@@ -332,6 +349,7 @@ func TestAppRun_Success(t *testing.T) {
 		mockGetPullRequestsImpl, // Pass mock implementations directly
 		mockGetCodeownersImpl,   // Pass mock implementations directly
 		mockSendMessageImpl,     // Pass mock implementations directly
+		nil,                     // FileFetcher - nil skips file fetching in tests
 	)
 
 	// Execute: Run the app logic

@@ -23,6 +23,11 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// FileFetcherInterface defines the interface for fetching PR files.
+type FileFetcherInterface interface {
+	FetchAndClassifyFiles(ctx context.Context, owner, repo string, prNumber int, changedFilesCount int) pullrequests.FileFetchResult
+}
+
 // --- Helper Functions ---
 
 func debug() slog.Level {
@@ -70,10 +75,11 @@ type App struct {
 	getPullReqsFunc   GetPullRequestsFunc
 	getCodeownersFunc GetCodeownersFunc
 	sendMessageFunc   SendMessageFunc
+	fileFetcher       FileFetcherInterface
 }
 
 // NewApp creates a new App instance with dependencies.
-func NewApp(l *slog.Logger, db store.Store, ghClient client.GitHubV4Client, getTeams GetTeamsFunc, getRepos GetReposFunc, getPRs GetPullRequestsFunc, getCodeowners GetCodeownersFunc, sendMsg SendMessageFunc) *App {
+func NewApp(l *slog.Logger, db store.Store, ghClient client.GitHubV4Client, getTeams GetTeamsFunc, getRepos GetReposFunc, getPRs GetPullRequestsFunc, getCodeowners GetCodeownersFunc, sendMsg SendMessageFunc, fileFetcher FileFetcherInterface) *App {
 	return &App{
 		log:               l,
 		db:                db,
@@ -83,6 +89,7 @@ func NewApp(l *slog.Logger, db store.Store, ghClient client.GitHubV4Client, getT
 		getPullReqsFunc:   getPRs,
 		getCodeownersFunc: getCodeowners,
 		sendMessageFunc:   sendMsg,
+		fileFetcher:       fileFetcher,
 	}
 }
 
@@ -182,6 +189,11 @@ func (a *App) Run(ctx context.Context) error {
 				a.log.Error("Error saving pull requests to DB", "org", repoOwner, "repo", repoName, "error", err)
 				// Continue with the next repository even if saving fails?
 			}
+
+			// Fetch and classify files for each PR (for generated code tracking)
+			if a.fileFetcher != nil {
+				a.fetchAndSavePRFiles(ctx, repoOwner, repoName, newPRs)
+			}
 		} else {
 			a.log.Info("No new pull requests found", "org", repoOwner, "repo", repoName)
 		}
@@ -204,6 +216,86 @@ func (a *App) Run(ctx context.Context) error {
 
 	a.log.Info("Cron job logic finished successfully.")
 	return nil // Indicate success
+}
+
+// fetchAndSavePRFiles fetches file-level data for PRs and saves generated code metrics.
+func (a *App) fetchAndSavePRFiles(ctx context.Context, repoOwner, repoName string, prs []pullrequests.PullRequest) {
+	for i, pr := range prs {
+		// Add a small delay between PRs to avoid hitting rate limits (50ms default)
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
+		prID := string(pr.Id)
+		prNumber := int(pr.Number)
+		changedFiles := int(pr.ChangedFiles)
+
+		// Skip if PR number is 0 (couldn't extract from URL)
+		if prNumber == 0 {
+			prNumber = pullrequests.ExtractPRNumber(string(pr.Url))
+			if prNumber == 0 {
+				a.log.Warn("Could not determine PR number, skipping file fetch",
+					"pr_id", prID, "url", pr.Url)
+				continue
+			}
+		}
+
+		// Fetch and classify files
+		result := a.fileFetcher.FetchAndClassifyFiles(ctx, repoOwner, repoName, prNumber, changedFiles)
+
+		if result.Error != nil {
+			a.log.Error("Error fetching PR files",
+				"pr_id", prID,
+				"org", repoOwner,
+				"repo", repoName,
+				"pr_number", prNumber,
+				"error", result.Error)
+			// Mark as incomplete but don't fail the whole job
+			if err := a.db.UpdatePRFilesIncomplete(ctx, prID, changedFiles); err != nil {
+				a.log.Error("Failed to mark PR files as incomplete", "pr_id", prID, "error", err)
+			}
+			continue
+		}
+
+		// If files weren't fetched due to threshold, mark as incomplete
+		if !result.FilesComplete && len(result.Files) == 0 {
+			if err := a.db.UpdatePRFilesIncomplete(ctx, prID, changedFiles); err != nil {
+				a.log.Error("Failed to mark PR files as incomplete", "pr_id", prID, "error", err)
+			}
+			continue
+		}
+
+		// Convert to store format and save
+		storeFiles := make([]store.PRFileChange, len(result.Files))
+		for i, f := range result.Files {
+			storeFiles[i] = store.PRFileChange{
+				Path:        f.Path,
+				Additions:   f.Additions,
+				Deletions:   f.Deletions,
+				Status:      f.Status,
+				IsGenerated: f.IsGenerated,
+			}
+		}
+
+		err := a.db.SavePullRequestFiles(ctx, prID, storeFiles,
+			result.GeneratedAdditions, result.GeneratedDeletions, result.FilesComplete)
+		if err != nil {
+			a.log.Error("Failed to save PR files",
+				"pr_id", prID,
+				"org", repoOwner,
+				"repo", repoName,
+				"error", err)
+		} else {
+			a.log.Debug("Saved PR files",
+				"pr_id", prID,
+				"total_files", len(result.Files),
+				"generated_additions", result.GeneratedAdditions,
+				"human_additions", result.HumanAdditions)
+		}
+	}
 }
 
 // --- Main Entry Point ---
@@ -259,16 +351,20 @@ func main() {
 
 	ghClient := client.Get() // Gets the real GitHub client
 
+	// Initialize file fetcher for generated code tracking
+	fileFetcher := pullrequests.NewFileFetcher(l)
+
 	// --- Create and Run App ---
 	app := NewApp(
 		l,
 		db,
 		ghClient,
-		organizations.GetTeams,    // Real function
-		repositories.Get,          // Real function
-		pullrequests.Get,          // Real function
+		organizations.GetTeams,     // Real function
+		repositories.Get,           // Real function
+		pullrequests.Get,           // Real function
 		codeowners.FetchCodeowners, // Real function for CODEOWNERS
-		slack.SendMessage,         // Real function
+		slack.SendMessage,          // Real function
+		fileFetcher,                // File fetcher for generated code tracking
 	)
 
 	if err := app.Run(ctx); err != nil {

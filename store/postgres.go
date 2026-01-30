@@ -251,21 +251,25 @@ func (p *Postgres) SavePullRequest(ctx context.Context, prs []pullrequests.PullR
 		// Or keep pgtype if that's accurate after regeneration check (let's keep pgtype for now)
 		// Match the exact types from the generated UpsertPullRequestParams struct
 		params := sqlc.UpsertPullRequestParams{
-			ID:                string(pr.Id),                                                                                  // Cast githubv4.String
-			Title:             sql.NullString{String: string(pr.Title), Valid: pr.Title != ""},                                // sql.NullString
-			State:             pgtype.Text{String: string(pr.State), Valid: pr.State != ""},                                   // pgtype.Text
-			Url:               sql.NullString{String: string(pr.Url), Valid: pr.Url != ""},                                    // sql.NullString
-			MergedAt:          mergedAt,                                                                                       // pgtype.Timestamptz
-			ClosedAt:          closedAt,                                                                                       // pgtype.Timestamptz
-			CreatedAt:         pgCreatedAt.Time,                                                                               // time.Time
-			Additions:         pgtype.Int4{Int32: int32(pr.Additions), Valid: true},                                           // pgtype.Int4
-			Deletions:         pgtype.Int4{Int32: int32(pr.Deletions), Valid: true},                                           // pgtype.Int4
-			BranchName:        sql.NullString{String: string(pr.HeadRefName), Valid: pr.HeadRefName != ""},                    // sql.NullString
-			Author:            pgtype.Text{String: string(pr.Author.Login), Valid: pr.Author.Login != ""},                     // pgtype.Text
-			RepositoryName:    pgtype.Text{String: string(pr.Repository.Name), Valid: pr.Repository.Name != ""},               // pgtype.Text
-			RepositoryOwner:   pgtype.Text{String: string(pr.Repository.Owner.Login), Valid: pr.Repository.Owner.Login != ""}, // pgtype.Text
-			ReviewsRequested:  pgtype.Int4{Int32: int32(pr.TimelineItems.TotalCount), Valid: true},                            // pgtype.Int4
-			ReviewRequestedAt: reviewAt,                                                                                       // pgtype.Timestamptz
+			ID:                 string(pr.Id),                                                                                  // Cast githubv4.String
+			Title:              sql.NullString{String: string(pr.Title), Valid: pr.Title != ""},                                // sql.NullString
+			State:              pgtype.Text{String: string(pr.State), Valid: pr.State != ""},                                   // pgtype.Text
+			Url:                sql.NullString{String: string(pr.Url), Valid: pr.Url != ""},                                    // sql.NullString
+			MergedAt:           mergedAt,                                                                                       // pgtype.Timestamptz
+			ClosedAt:           closedAt,                                                                                       // pgtype.Timestamptz
+			CreatedAt:          pgCreatedAt.Time,                                                                               // time.Time
+			Additions:          pgtype.Int4{Int32: int32(pr.Additions), Valid: true},                                           // pgtype.Int4
+			Deletions:          pgtype.Int4{Int32: int32(pr.Deletions), Valid: true},                                           // pgtype.Int4
+			BranchName:         sql.NullString{String: string(pr.HeadRefName), Valid: pr.HeadRefName != ""},                    // sql.NullString
+			Author:             pgtype.Text{String: string(pr.Author.Login), Valid: pr.Author.Login != ""},                     // pgtype.Text
+			RepositoryName:     pgtype.Text{String: string(pr.Repository.Name), Valid: pr.Repository.Name != ""},               // pgtype.Text
+			RepositoryOwner:    pgtype.Text{String: string(pr.Repository.Owner.Login), Valid: pr.Repository.Owner.Login != ""}, // pgtype.Text
+			ReviewsRequested:   pgtype.Int4{Int32: int32(pr.TimelineItems.TotalCount), Valid: true},                            // pgtype.Int4
+			ReviewRequestedAt:  reviewAt,                                                                                       // pgtype.Timestamptz
+			ChangedFiles:       pgtype.Int4{Int32: int32(pr.ChangedFiles), Valid: true},                                        // pgtype.Int4
+			GeneratedAdditions: pgtype.Int4{Int32: 0, Valid: true},                                                             // Will be updated after file fetch
+			GeneratedDeletions: pgtype.Int4{Int32: 0, Valid: true},                                                             // Will be updated after file fetch
+			FilesComplete:      pgtype.Bool{Bool: true, Valid: true},                                                           // Default to true, updated after file fetch
 		}
 
 		err = qtx.UpsertPullRequest(ctx, params)
@@ -402,9 +406,9 @@ func (p *Postgres) SaveTeams(ctx context.Context, teams map[string][]organizatio
 
 			err = qtx.CreateTeamMember(ctx, sqlc.CreateTeamMemberParams{
 				Team:           teamName,
-				Member:         memberInfo.Login,  // Use Login from MemberInfo
-				AvatarUrl:      avatarURL,         // Pass the avatar URL
-				GithubTeamSlug: githubSlug,        // Pass the GitHub team slug
+				Member:         memberInfo.Login, // Use Login from MemberInfo
+				AvatarUrl:      avatarURL,        // Pass the avatar URL
+				GithubTeamSlug: githubSlug,       // Pass the GitHub team slug
 			})
 			if err != nil {
 				p.Logger.Error("Failed to insert team member", "team", teamName, "member", memberInfo.Login, "error", err)
@@ -751,4 +755,97 @@ func (p *Postgres) SaveRepositoryOwners(ctx context.Context, ownerships []codeow
 
 	p.Logger.Info("Repository owners saved successfully", "count", len(ownerships))
 	return nil
+}
+
+// SavePullRequestFiles saves file-level changes for a PR and updates the generated code metrics.
+func (p *Postgres) SavePullRequestFiles(ctx context.Context, prID string, files []PRFileChange, generatedAdditions, generatedDeletions int, filesComplete bool) error {
+	tx, err := p.connPool.Begin(ctx)
+	if err != nil {
+		p.Logger.Error("Failed to begin transaction for saving PR files", "error", err)
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := p.queries.WithTx(tx)
+
+	// Delete existing files for this PR (in case of re-sync)
+	err = qtx.DeletePullRequestFiles(ctx, prID)
+	if err != nil {
+		p.Logger.Error("Failed to delete existing PR files", "pr_id", prID, "error", err)
+		return err
+	}
+
+	// Insert new files
+	for _, file := range files {
+		err = qtx.UpsertPullRequestFile(ctx, sqlc.UpsertPullRequestFileParams{
+			PullRequestID: prID,
+			FilePath:      file.Path,
+			Additions:     int32(file.Additions),
+			Deletions:     int32(file.Deletions),
+			Status:        pgtype.Text{String: file.Status, Valid: file.Status != ""},
+			IsGenerated:   file.IsGenerated,
+		})
+		if err != nil {
+			p.Logger.Error("Failed to insert PR file", "pr_id", prID, "file", file.Path, "error", err)
+			return err
+		}
+	}
+
+	// Update the PR's generated stats
+	err = qtx.UpdatePRGeneratedStats(ctx, sqlc.UpdatePRGeneratedStatsParams{
+		ID:                 prID,
+		ChangedFiles:       pgtype.Int4{Int32: int32(len(files)), Valid: true},
+		GeneratedAdditions: pgtype.Int4{Int32: int32(generatedAdditions), Valid: true},
+		GeneratedDeletions: pgtype.Int4{Int32: int32(generatedDeletions), Valid: true},
+		FilesComplete:      pgtype.Bool{Bool: filesComplete, Valid: true},
+	})
+	if err != nil {
+		p.Logger.Error("Failed to update PR generated stats", "pr_id", prID, "error", err)
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		p.Logger.Error("Failed to commit PR files transaction", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+// UpdatePRFilesIncomplete marks a PR as having incomplete file tracking (for large PRs).
+func (p *Postgres) UpdatePRFilesIncomplete(ctx context.Context, prID string, changedFiles int) error {
+	return p.queries.UpdatePRGeneratedStats(ctx, sqlc.UpdatePRGeneratedStatsParams{
+		ID:                 prID,
+		ChangedFiles:       pgtype.Int4{Int32: int32(changedFiles), Valid: true},
+		GeneratedAdditions: pgtype.Int4{Int32: 0, Valid: true},
+		GeneratedDeletions: pgtype.Int4{Int32: 0, Valid: true},
+		FilesComplete:      pgtype.Bool{Bool: false, Valid: true},
+	})
+}
+
+// GetTeamGeneratedCodeStats retrieves generated vs human code statistics for a team.
+func (p *Postgres) GetTeamGeneratedCodeStats(ctx context.Context, arg sqlc.GetTeamGeneratedCodeStatsByDateRangeParams) (sqlc.GetTeamGeneratedCodeStatsByDateRangeRow, error) {
+	stats, err := p.queries.GetTeamGeneratedCodeStatsByDateRange(ctx, arg)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			p.Logger.Info("No generated code stats found for team in date range", "team", arg.TeamName)
+			return sqlc.GetTeamGeneratedCodeStatsByDateRangeRow{}, nil
+		}
+		p.Logger.Error("Failed to get team generated code stats", "team", arg.TeamName, "error", err)
+		return sqlc.GetTeamGeneratedCodeStatsByDateRangeRow{}, err
+	}
+	return stats, nil
+}
+
+// GetPRsWithIncompleteFiles retrieves PRs that have incomplete file tracking.
+func (p *Postgres) GetPRsWithIncompleteFiles(ctx context.Context) ([]sqlc.GetPRsWithIncompleteFilesRow, error) {
+	prs, err := p.queries.GetPRsWithIncompleteFiles(ctx)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []sqlc.GetPRsWithIncompleteFilesRow{}, nil
+		}
+		p.Logger.Error("Failed to get PRs with incomplete files", "error", err)
+		return nil, err
+	}
+	return prs, nil
 }

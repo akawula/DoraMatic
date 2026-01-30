@@ -6,8 +6,8 @@ import (
 	// "fmt" // Remove unused import
 	"time"
 
-	"github.com/akawula/DoraMatic/github/codeowners"     // Import codeowners package
-	"github.com/akawula/DoraMatic/github/organizations"  // Import organizations package
+	"github.com/akawula/DoraMatic/github/codeowners"    // Import codeowners package
+	"github.com/akawula/DoraMatic/github/organizations" // Import organizations package
 	"github.com/akawula/DoraMatic/github/pullrequests"
 	"github.com/akawula/DoraMatic/github/repositories"
 	"github.com/akawula/DoraMatic/store/sqlc" // Import sqlc package
@@ -27,6 +27,15 @@ type SecurityPR struct {
 	State           string
 	CreatedAt       string             `db:"created_at"` // Keep as string
 	MergedAt        pgtype.Timestamptz `db:"merged_at"`  // Changed to pgtype.Timestamptz as used in postgres.go
+}
+
+// PRFileChange represents a file change in a PR for storage.
+type PRFileChange struct {
+	Path        string
+	Additions   int
+	Deletions   int
+	Status      string
+	IsGenerated bool
 }
 
 type Store interface {
@@ -78,6 +87,12 @@ type Store interface {
 
 	// Repository ownership methods (CODEOWNERS)
 	SaveRepositoryOwners(ctx context.Context, ownerships []codeowners.RepositoryOwnership) error
+
+	// Generated code tracking methods
+	SavePullRequestFiles(ctx context.Context, prID string, files []PRFileChange, generatedAdditions, generatedDeletions int, filesComplete bool) error
+	UpdatePRFilesIncomplete(ctx context.Context, prID string, changedFiles int) error
+	GetTeamGeneratedCodeStats(ctx context.Context, arg sqlc.GetTeamGeneratedCodeStatsByDateRangeParams) (sqlc.GetTeamGeneratedCodeStatsByDateRangeRow, error)
+	GetPRsWithIncompleteFiles(ctx context.Context) ([]sqlc.GetPRsWithIncompleteFilesRow, error)
 }
 
 // getQueryRepos is no longer used by postgres.go after sqlc refactor
