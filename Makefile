@@ -205,6 +205,9 @@ db-restore: ## Restore the PostgreSQL database to the Kubernetes pod from a back
 		exit 1; \
 	fi; \
 	echo "Restoring database from file: $(BACKUP_FILE) into pod: $$POD_NAME..."; \
+	echo "Dropping and recreating database for clean restore..."; \
+	kubectl exec $$POD_NAME -- bash -c "psql -U $$POSTGRES_USER -d postgres -c 'DROP DATABASE IF EXISTS $$POSTGRES_DB;'"; \
+	kubectl exec $$POD_NAME -- bash -c "psql -U $$POSTGRES_USER -d postgres -c 'CREATE DATABASE $$POSTGRES_DB;'"; \
 	TMP_BACKUP_PATH="/tmp/restore_backup.sql"; \
 	echo "Copying backup file to pod..."; \
 	kubectl cp "$(BACKUP_FILE)" "$$POD_NAME:$$TMP_BACKUP_PATH"; \

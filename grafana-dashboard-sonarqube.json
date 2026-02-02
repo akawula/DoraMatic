@@ -63,7 +63,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key, metric_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key IN ('reliability_rating', 'security_rating', 'sqale_rating')\n),\nproject_gates AS (\n  SELECT project_key,\n    MAX(CASE WHEN metric_key = 'reliability_rating' THEN metric_value END) as reliability,\n    MAX(CASE WHEN metric_key = 'security_rating' THEN metric_value END) as security,\n    MAX(CASE WHEN metric_key = 'sqale_rating' THEN metric_value END) as maintainability\n  FROM latest WHERE rn = 1 GROUP BY project_key\n)\nSELECT \n  ROUND((100.0 * COUNT(*) FILTER (WHERE reliability <= 2 AND security <= 2 AND maintainability <= 2) / NULLIF(COUNT(*), 0))::numeric, 1) as value\nFROM project_gates;",
+          "rawSql": "WITH latest AS (\n  SELECT m.project_key, m.metric_key, m.metric_value,\n    ROW_NUMBER() OVER (PARTITION BY m.project_key, m.metric_key ORDER BY m.recorded_at DESC) as rn\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  WHERE m.metric_key IN ('reliability_rating', 'security_rating', 'sqale_rating')\n    AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n),\nproject_gates AS (\n  SELECT project_key,\n    MAX(CASE WHEN metric_key = 'reliability_rating' THEN metric_value END) as reliability,\n    MAX(CASE WHEN metric_key = 'security_rating' THEN metric_value END) as security,\n    MAX(CASE WHEN metric_key = 'sqale_rating' THEN metric_value END) as maintainability\n  FROM latest WHERE rn = 1 GROUP BY project_key\n)\nSELECT \n  ROUND((100.0 * COUNT(*) FILTER (WHERE reliability <= 2 AND security <= 2 AND maintainability <= 2) / NULLIF(COUNT(*), 0))::numeric, 1) as value\nFROM project_gates;",
           "refId": "A"
         }
       ],
@@ -105,7 +105,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key, metric_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'security_rating'\n)\nSELECT COUNT(*) as value FROM latest WHERE rn = 1 AND metric_value >= 4;",
+          "rawSql": "WITH latest AS (\n  SELECT m.project_key, m.metric_key, m.metric_value,\n    ROW_NUMBER() OVER (PARTITION BY m.project_key, m.metric_key ORDER BY m.recorded_at DESC) as rn\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  WHERE m.metric_key = 'security_rating'\n    AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n)\nSELECT COUNT(*) as value FROM latest WHERE rn = 1 AND metric_value >= 4;",
           "refId": "A"
         }
       ],
@@ -147,7 +147,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'sqale_index'\n)\nSELECT ROUND((SUM(metric_value) / 480.0)::numeric, 1) as value FROM latest WHERE rn = 1;",
+          "rawSql": "WITH latest AS (\n  SELECT m.project_key, m.metric_value,\n    ROW_NUMBER() OVER (PARTITION BY m.project_key ORDER BY m.recorded_at DESC) as rn\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  WHERE m.metric_key = 'sqale_index'\n    AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n)\nSELECT ROUND((SUM(metric_value) / 480.0)::numeric, 1) as value FROM latest WHERE rn = 1;",
           "refId": "A"
         }
       ],
@@ -190,7 +190,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'coverage'\n)\nSELECT ROUND(AVG(metric_value)::numeric, 1) as value FROM latest WHERE rn = 1;",
+          "rawSql": "WITH latest AS (\n  SELECT m.project_key, m.metric_value,\n    ROW_NUMBER() OVER (PARTITION BY m.project_key ORDER BY m.recorded_at DESC) as rn\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  WHERE m.metric_key = 'coverage'\n    AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n)\nSELECT ROUND(AVG(metric_value)::numeric, 1) as value FROM latest WHERE rn = 1;",
           "refId": "A"
         }
       ],
@@ -230,7 +230,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(DISTINCT project_key) as value FROM sonarqube_projects;",
+          "rawSql": "SELECT COUNT(DISTINCT project_key) as value FROM sonarqube_projects p\nWHERE ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')));",
           "refId": "A"
         }
       ],
@@ -276,12 +276,12 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH current_bugs AS (\n  SELECT SUM(metric_value) as total\n  FROM sonarqube_metrics\n  WHERE metric_key = 'bugs'\n    AND recorded_at = (SELECT MAX(recorded_at) FROM sonarqube_metrics)\n),\nweek_ago_bugs AS (\n  SELECT SUM(metric_value) as total\n  FROM sonarqube_metrics\n  WHERE metric_key = 'bugs'\n    AND recorded_at = (\n      SELECT MAX(recorded_at) FROM sonarqube_metrics \n      WHERE recorded_at < NOW() - INTERVAL '7 days'\n    )\n)\nSELECT COALESCE(c.total, 0) - COALESCE(w.total, 0) as \"7d Bug Delta\"\nFROM current_bugs c, week_ago_bugs w;",
+          "rawSql": "WITH date_range AS (\n  SELECT \n    MAX(recorded_at) as current_date,\n    MAX(recorded_at) FILTER (WHERE recorded_at <= NOW() - INTERVAL '6 days') as week_ago_date\n  FROM sonarqube_metrics\n),\ncurrent_bugs AS (\n  SELECT COALESCE(SUM(m.metric_value), 0) as total\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  CROSS JOIN date_range dr\n  WHERE m.metric_key = 'bugs'\n    AND m.recorded_at = dr.current_date\n    AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n),\nweek_ago_bugs AS (\n  SELECT COALESCE(SUM(m.metric_value), 0) as total\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  CROSS JOIN date_range dr\n  WHERE m.metric_key = 'bugs'\n    AND m.recorded_at = dr.week_ago_date\n    AND dr.week_ago_date IS NOT NULL\n    AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n)\nSELECT \n  CASE \n    WHEN (SELECT week_ago_date FROM date_range) IS NULL THEN NULL\n    ELSE c.total - w.total \n  END as \"7d Bug Delta\"\nFROM current_bugs c, week_ago_bugs w;",
           "refId": "A"
         }
       ],
       "title": "7-Day Bug Delta",
-      "description": "Change in total bugs over past 7 days. Green = decreasing, Red = increasing",
+      "description": "Change in total bugs over past 7 days. Green = decreasing, Red = increasing. Shows NULL if no historical data available.",
       "type": "stat"
     },
     {
@@ -323,7 +323,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'reliability_rating'\n)\nSELECT \n  CASE \n    WHEN metric_value = 1 THEN 'A'\n    WHEN metric_value = 2 THEN 'B'\n    WHEN metric_value = 3 THEN 'C'\n    WHEN metric_value = 4 THEN 'D'\n    ELSE 'E'\n  END as rating,\n  COUNT(*) as count\nFROM latest WHERE rn = 1\nGROUP BY rating ORDER BY rating;",
+          "rawSql": "WITH latest AS (\n  SELECT m.project_key, m.metric_value,\n    ROW_NUMBER() OVER (PARTITION BY m.project_key ORDER BY m.recorded_at DESC) as rn\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  WHERE m.metric_key = 'reliability_rating'\n    AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n)\nSELECT \n  CASE \n    WHEN metric_value = 1 THEN 'A'\n    WHEN metric_value = 2 THEN 'B'\n    WHEN metric_value = 3 THEN 'C'\n    WHEN metric_value = 4 THEN 'D'\n    ELSE 'E'\n  END as rating,\n  COUNT(*) as count\nFROM latest WHERE rn = 1\nGROUP BY rating ORDER BY rating;",
           "refId": "A"
         }
       ],
@@ -365,7 +365,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'security_rating'\n)\nSELECT \n  CASE \n    WHEN metric_value = 1 THEN 'A'\n    WHEN metric_value = 2 THEN 'B'\n    WHEN metric_value = 3 THEN 'C'\n    WHEN metric_value = 4 THEN 'D'\n    ELSE 'E'\n  END as rating,\n  COUNT(*) as count\nFROM latest WHERE rn = 1\nGROUP BY rating ORDER BY rating;",
+          "rawSql": "WITH latest AS (\n  SELECT m.project_key, m.metric_value,\n    ROW_NUMBER() OVER (PARTITION BY m.project_key ORDER BY m.recorded_at DESC) as rn\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  WHERE m.metric_key = 'security_rating'\n    AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n)\nSELECT \n  CASE \n    WHEN metric_value = 1 THEN 'A'\n    WHEN metric_value = 2 THEN 'B'\n    WHEN metric_value = 3 THEN 'C'\n    WHEN metric_value = 4 THEN 'D'\n    ELSE 'E'\n  END as rating,\n  COUNT(*) as count\nFROM latest WHERE rn = 1\nGROUP BY rating ORDER BY rating;",
           "refId": "A"
         }
       ],
@@ -404,7 +404,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH latest AS (\n  SELECT project_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics WHERE metric_key = 'sqale_rating'\n)\nSELECT \n  CASE \n    WHEN metric_value = 1 THEN 'A'\n    WHEN metric_value = 2 THEN 'B'\n    WHEN metric_value = 3 THEN 'C'\n    WHEN metric_value = 4 THEN 'D'\n    ELSE 'E'\n  END as rating,\n  COUNT(*) as count\nFROM latest WHERE rn = 1\nGROUP BY rating ORDER BY rating;",
+          "rawSql": "WITH latest AS (\n  SELECT m.project_key, m.metric_value,\n    ROW_NUMBER() OVER (PARTITION BY m.project_key ORDER BY m.recorded_at DESC) as rn\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  WHERE m.metric_key = 'sqale_rating'\n    AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n)\nSELECT \n  CASE \n    WHEN metric_value = 1 THEN 'A'\n    WHEN metric_value = 2 THEN 'B'\n    WHEN metric_value = 3 THEN 'C'\n    WHEN metric_value = 4 THEN 'D'\n    ELSE 'E'\n  END as rating,\n  COUNT(*) as count\nFROM latest WHERE rn = 1\nGROUP BY rating ORDER BY rating;",
           "refId": "A"
         }
       ],
@@ -451,7 +451,7 @@
         "overrides": [
           { "matcher": { "id": "byName", "options": "Bugs" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "Vulnerabilities" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "Code Smells" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
+          { "matcher": { "id": "byName", "options": "Code Smells (100s)" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
         ]
       },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
@@ -466,7 +466,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  SUM(CASE WHEN metric_key = 'bugs' THEN metric_value ELSE 0 END) as \"Bugs\",\n  SUM(CASE WHEN metric_key = 'vulnerabilities' THEN metric_value ELSE 0 END) as \"Vulnerabilities\",\n  SUM(CASE WHEN metric_key = 'code_smells' THEN metric_value ELSE 0 END) / 100 as \"Code Smells (100s)\"\nFROM sonarqube_metrics\nWHERE metric_key IN ('bugs', 'vulnerabilities', 'code_smells')\n  AND $__timeFilter(recorded_at)\nGROUP BY DATE(recorded_at)\nORDER BY time;",
+          "rawSql": "SELECT \n  DATE(m.recorded_at) as time,\n  SUM(CASE WHEN m.metric_key = 'bugs' THEN m.metric_value ELSE 0 END) as \"Bugs\",\n  SUM(CASE WHEN m.metric_key = 'vulnerabilities' THEN m.metric_value ELSE 0 END) as \"Vulnerabilities\",\n  SUM(CASE WHEN m.metric_key = 'code_smells' THEN m.metric_value ELSE 0 END) / 100 as \"Code Smells (100s)\"\nFROM sonarqube_metrics m\nJOIN sonarqube_projects p ON m.project_key = p.project_key\nWHERE m.metric_key IN ('bugs', 'vulnerabilities', 'code_smells')\n  AND $__timeFilter(m.recorded_at)\n  AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\nGROUP BY DATE(m.recorded_at)\nORDER BY time;",
           "refId": "A"
         }
       ],
@@ -520,7 +520,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "WITH daily_debt AS (\n  SELECT \n    DATE(recorded_at) as day,\n    SUM(metric_value) / 480.0 as total_debt_days\n  FROM sonarqube_metrics\n  WHERE metric_key = 'sqale_index'\n    AND $__timeFilter(recorded_at)\n  GROUP BY DATE(recorded_at)\n)\nSELECT \n  day as time,\n  ROUND((total_debt_days - LAG(total_debt_days) OVER (ORDER BY day))::numeric, 2) as \"Debt Delta (days)\"\nFROM daily_debt\nORDER BY day;",
+          "rawSql": "WITH daily_debt AS (\n  SELECT \n    DATE(m.recorded_at) as day,\n    SUM(m.metric_value) / 480.0 as total_debt_days\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  WHERE m.metric_key = 'sqale_index'\n    AND $__timeFilter(m.recorded_at)\n    AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n  GROUP BY DATE(m.recorded_at)\n)\nSELECT \n  day as time,\n  ROUND((total_debt_days - LAG(total_debt_days) OVER (ORDER BY day))::numeric, 2) as \"Debt Delta (days)\"\nFROM daily_debt\nORDER BY day;",
           "refId": "A"
         }
       ],
@@ -587,7 +587,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  ROUND(AVG(metric_value)::numeric, 1) as \"Avg Coverage\",\n  ROUND(MIN(metric_value)::numeric, 1) as \"Min Coverage\",\n  ROUND(MAX(metric_value)::numeric, 1) as \"Max Coverage\"\nFROM sonarqube_metrics\nWHERE metric_key = 'coverage'\n  AND $__timeFilter(recorded_at)\nGROUP BY DATE(recorded_at)\nORDER BY time;",
+          "rawSql": "SELECT \n  DATE(m.recorded_at) as time,\n  ROUND(AVG(m.metric_value)::numeric, 1) as \"Avg Coverage\",\n  ROUND(MIN(m.metric_value)::numeric, 1) as \"Min Coverage\",\n  ROUND(MAX(m.metric_value)::numeric, 1) as \"Max Coverage\"\nFROM sonarqube_metrics m\nJOIN sonarqube_projects p ON m.project_key = p.project_key\nWHERE m.metric_key = 'coverage'\n  AND $__timeFilter(m.recorded_at)\n  AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\nGROUP BY DATE(m.recorded_at)\nORDER BY time;",
           "refId": "A"
         }
       ],
@@ -637,7 +637,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT \n  DATE(recorded_at) as time,\n  ROUND(AVG(metric_value)::numeric, 1) as \"Avg Duplication %\"\nFROM sonarqube_metrics\nWHERE metric_key = 'duplicated_lines_density'\n  AND $__timeFilter(recorded_at)\nGROUP BY DATE(recorded_at)\nORDER BY time;",
+          "rawSql": "SELECT \n  DATE(m.recorded_at) as time,\n  ROUND(AVG(m.metric_value)::numeric, 1) as \"Avg Duplication %\"\nFROM sonarqube_metrics m\nJOIN sonarqube_projects p ON m.project_key = p.project_key\nWHERE m.metric_key = 'duplicated_lines_density'\n  AND $__timeFilter(m.recorded_at)\n  AND ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\nGROUP BY DATE(m.recorded_at)\nORDER BY time;",
           "refId": "A"
         }
       ],
@@ -719,7 +719,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH latest_metrics AS (\n  SELECT \n    project_key, metric_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key, metric_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics\n),\npivoted AS (\n  SELECT \n    project_key,\n    MAX(CASE WHEN metric_key = 'bugs' THEN metric_value END) as bugs,\n    MAX(CASE WHEN metric_key = 'vulnerabilities' THEN metric_value END) as vulnerabilities,\n    MAX(CASE WHEN metric_key = 'code_smells' THEN metric_value END) as code_smells,\n    MAX(CASE WHEN metric_key = 'coverage' THEN metric_value END) as coverage,\n    MAX(CASE WHEN metric_key = 'ncloc' THEN metric_value END) as lines_of_code,\n    MAX(CASE WHEN metric_key = 'sqale_index' THEN metric_value END) / 480.0 as debt_days,\n    MAX(CASE WHEN metric_key = 'reliability_rating' THEN metric_value END) as reliability,\n    MAX(CASE WHEN metric_key = 'security_rating' THEN metric_value END) as security,\n    MAX(CASE WHEN metric_key = 'sqale_rating' THEN metric_value END) as maintainability\n  FROM latest_metrics WHERE rn = 1\n  GROUP BY project_key\n)\nSELECT \n  p.project_name,\n  ROUND(pv.bugs::numeric) as bugs,\n  ROUND(pv.vulnerabilities::numeric) as vulnerabilities,\n  ROUND(pv.coverage::numeric, 1) as coverage,\n  ROUND(pv.debt_days::numeric, 1) as debt_days,\n  pv.reliability::int as reliability,\n  pv.security::int as security,\n  pv.maintainability::int as maintainability,\n  ROUND(pv.lines_of_code::numeric) as lines_of_code,\n  ROUND((\n    COALESCE(pv.bugs, 0) * 3 + \n    COALESCE(pv.vulnerabilities, 0) * 5 + \n    GREATEST(0, 80 - COALESCE(pv.coverage, 0)) * 0.5 +\n    COALESCE(pv.debt_days, 0) * 0.5\n  )::numeric, 1) as risk_score\nFROM sonarqube_projects p\nJOIN pivoted pv ON p.project_key = pv.project_key\nWHERE pv.bugs IS NOT NULL OR pv.vulnerabilities IS NOT NULL\nORDER BY risk_score DESC\nLIMIT 30;",
+          "rawSql": "WITH latest_metrics AS (\n  SELECT \n    m.project_key, m.metric_key, m.metric_value,\n    ROW_NUMBER() OVER (PARTITION BY m.project_key, m.metric_key ORDER BY m.recorded_at DESC) as rn\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  WHERE ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n),\npivoted AS (\n  SELECT \n    project_key,\n    MAX(CASE WHEN metric_key = 'bugs' THEN metric_value END) as bugs,\n    MAX(CASE WHEN metric_key = 'vulnerabilities' THEN metric_value END) as vulnerabilities,\n    MAX(CASE WHEN metric_key = 'code_smells' THEN metric_value END) as code_smells,\n    MAX(CASE WHEN metric_key = 'coverage' THEN metric_value END) as coverage,\n    MAX(CASE WHEN metric_key = 'ncloc' THEN metric_value END) as lines_of_code,\n    MAX(CASE WHEN metric_key = 'sqale_index' THEN metric_value END) / 480.0 as debt_days,\n    MAX(CASE WHEN metric_key = 'reliability_rating' THEN metric_value END) as reliability,\n    MAX(CASE WHEN metric_key = 'security_rating' THEN metric_value END) as security,\n    MAX(CASE WHEN metric_key = 'sqale_rating' THEN metric_value END) as maintainability\n  FROM latest_metrics WHERE rn = 1\n  GROUP BY project_key\n)\nSELECT \n  p.project_name,\n  ROUND(pv.bugs::numeric) as bugs,\n  ROUND(pv.vulnerabilities::numeric) as vulnerabilities,\n  ROUND(pv.coverage::numeric, 1) as coverage,\n  ROUND(pv.debt_days::numeric, 1) as debt_days,\n  pv.reliability::int as reliability,\n  pv.security::int as security,\n  pv.maintainability::int as maintainability,\n  ROUND(pv.lines_of_code::numeric) as lines_of_code,\n  ROUND((\n    COALESCE(pv.bugs, 0) * 3 + \n    COALESCE(pv.vulnerabilities, 0) * 5 + \n    GREATEST(0, 80 - COALESCE(pv.coverage, 0)) * 0.5 +\n    COALESCE(pv.debt_days, 0) * 0.5\n  )::numeric, 1) as risk_score\nFROM sonarqube_projects p\nJOIN pivoted pv ON p.project_key = pv.project_key\nWHERE pv.bugs IS NOT NULL OR pv.vulnerabilities IS NOT NULL\nORDER BY risk_score DESC\nLIMIT 30;",
           "refId": "A"
         }
       ],
@@ -744,7 +744,7 @@
             "overrides": [
               { "matcher": { "id": "byName", "options": "coverage" }, "properties": [{ "id": "unit", "value": "percent" }] },
               { "matcher": { "id": "byName", "options": "duplication" }, "properties": [{ "id": "unit", "value": "percent" }] },
-              { "matcher": { "id": "byName", "options": "debt_hours" }, "properties": [{ "id": "unit", "value": "h" }] },
+              { "matcher": { "id": "byName", "options": "debt_days" }, "properties": [{ "id": "unit", "value": "d" }, { "id": "displayName", "value": "Tech Debt (days)" }] },
               { "matcher": { "id": "byName", "options": "lines_of_code" }, "properties": [{ "id": "unit", "value": "locale" }] }
             ]
           },
@@ -762,7 +762,7 @@
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "WITH latest_metrics AS (\n  SELECT \n    project_key, metric_key, metric_value,\n    ROW_NUMBER() OVER (PARTITION BY project_key, metric_key ORDER BY recorded_at DESC) as rn\n  FROM sonarqube_metrics\n)\nSELECT \n  p.project_name,\n  MAX(CASE WHEN lm.metric_key = 'bugs' THEN lm.metric_value END) as bugs,\n  MAX(CASE WHEN lm.metric_key = 'vulnerabilities' THEN lm.metric_value END) as vulnerabilities,\n  MAX(CASE WHEN lm.metric_key = 'code_smells' THEN lm.metric_value END) as code_smells,\n  MAX(CASE WHEN lm.metric_key = 'coverage' THEN lm.metric_value END) as coverage,\n  MAX(CASE WHEN lm.metric_key = 'duplicated_lines_density' THEN lm.metric_value END) as duplication,\n  MAX(CASE WHEN lm.metric_key = 'ncloc' THEN lm.metric_value END) as lines_of_code,\n  ROUND((MAX(CASE WHEN lm.metric_key = 'sqale_index' THEN lm.metric_value END) / 60.0)::numeric, 1) as debt_hours\nFROM sonarqube_projects p\nLEFT JOIN latest_metrics lm ON p.project_key = lm.project_key AND lm.rn = 1\nGROUP BY p.project_name\nORDER BY lines_of_code DESC NULLS LAST;",
+              "rawSql": "WITH latest_metrics AS (\n  SELECT \n    m.project_key, m.metric_key, m.metric_value,\n    ROW_NUMBER() OVER (PARTITION BY m.project_key, m.metric_key ORDER BY m.recorded_at DESC) as rn\n  FROM sonarqube_metrics m\n  JOIN sonarqube_projects p ON m.project_key = p.project_key\n  WHERE ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\n)\nSELECT \n  p.project_name,\n  MAX(CASE WHEN lm.metric_key = 'bugs' THEN lm.metric_value END) as bugs,\n  MAX(CASE WHEN lm.metric_key = 'vulnerabilities' THEN lm.metric_value END) as vulnerabilities,\n  MAX(CASE WHEN lm.metric_key = 'code_smells' THEN lm.metric_value END) as code_smells,\n  MAX(CASE WHEN lm.metric_key = 'coverage' THEN lm.metric_value END) as coverage,\n  MAX(CASE WHEN lm.metric_key = 'duplicated_lines_density' THEN lm.metric_value END) as duplication,\n  MAX(CASE WHEN lm.metric_key = 'ncloc' THEN lm.metric_value END) as lines_of_code,\n  ROUND((MAX(CASE WHEN lm.metric_key = 'sqale_index' THEN lm.metric_value END) / 480.0)::numeric, 1) as debt_days\nFROM sonarqube_projects p\nLEFT JOIN latest_metrics lm ON p.project_key = lm.project_key AND lm.rn = 1\nWHERE ('${project:raw}' = '$__all' OR p.project_name = ANY(string_to_array('${project:csv}', ',')))\nGROUP BY p.project_name\nORDER BY lines_of_code DESC NULLS LAST;",
               "refId": "A"
             }
           ],
@@ -923,7 +923,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(*) as value\nFROM repositories r\nWHERE NOT EXISTS (\n  SELECT 1 FROM sonarqube_projects sp \n  WHERE sp.project_key ILIKE '%' || r.slug || '%'\n     OR sp.project_name ILIKE '%' || r.slug || '%'\n);",
+          "rawSql": "SELECT COUNT(*) as value\nFROM repositories r\nWHERE NOT EXISTS (\n  SELECT 1 FROM sonarqube_projects sp \n  WHERE LOWER(sp.project_key) = LOWER(r.org || '_' || r.slug)\n     OR LOWER(sp.project_key) = LOWER(r.slug)\n     OR LOWER(sp.project_name) = LOWER(r.slug)\n     OR sp.project_key LIKE '%:' || r.slug\n     OR sp.project_key LIKE r.org || '_%_' || r.slug\n);",
           "refId": "A"
         }
       ],
@@ -967,7 +967,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH repo_coverage AS (\n  SELECT r.org, r.slug,\n    CASE WHEN EXISTS (\n      SELECT 1 FROM sonarqube_projects sp \n      WHERE sp.project_key ILIKE '%' || r.slug || '%'\n         OR sp.project_name ILIKE '%' || r.slug || '%'\n    ) THEN 1 ELSE 0 END as has_sonar\n  FROM repositories r\n)\nSELECT ROUND((100.0 * SUM(has_sonar) / NULLIF(COUNT(*), 0))::numeric, 1) as value\nFROM repo_coverage;",
+          "rawSql": "WITH repo_coverage AS (\n  SELECT r.org, r.slug,\n    CASE WHEN EXISTS (\n      SELECT 1 FROM sonarqube_projects sp \n      WHERE LOWER(sp.project_key) = LOWER(r.org || '_' || r.slug)\n         OR LOWER(sp.project_key) = LOWER(r.slug)\n         OR LOWER(sp.project_name) = LOWER(r.slug)\n         OR sp.project_key LIKE '%:' || r.slug\n         OR sp.project_key LIKE r.org || '_%_' || r.slug\n    ) THEN 1 ELSE 0 END as has_sonar\n  FROM repositories r\n)\nSELECT ROUND((100.0 * SUM(has_sonar) / NULLIF(COUNT(*), 0))::numeric, 1) as value\nFROM repo_coverage;",
           "refId": "A"
         }
       ],
@@ -1047,7 +1047,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(*) as value\nFROM repositories r\nWHERE EXISTS (\n  SELECT 1 FROM sonarqube_projects sp \n  WHERE sp.project_key ILIKE '%' || r.slug || '%'\n     OR sp.project_name ILIKE '%' || r.slug || '%'\n);",
+          "rawSql": "SELECT COUNT(*) as value\nFROM repositories r\nWHERE EXISTS (\n  SELECT 1 FROM sonarqube_projects sp \n  WHERE LOWER(sp.project_key) = LOWER(r.org || '_' || r.slug)\n     OR LOWER(sp.project_key) = LOWER(r.slug)\n     OR LOWER(sp.project_name) = LOWER(r.slug)\n     OR sp.project_key LIKE '%:' || r.slug\n     OR sp.project_key LIKE r.org || '_%_' || r.slug\n);",
           "refId": "A"
         }
       ],
@@ -1083,7 +1083,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT r.org, r.slug, COALESCE(r.language, 'unknown') as language\nFROM repositories r\nWHERE NOT EXISTS (\n  SELECT 1 FROM sonarqube_projects sp \n  WHERE sp.project_key ILIKE '%' || r.slug || '%'\n     OR sp.project_name ILIKE '%' || r.slug || '%'\n)\nORDER BY r.org, r.slug;",
+          "rawSql": "SELECT r.org, r.slug, COALESCE(r.language, 'unknown') as language\nFROM repositories r\nWHERE NOT EXISTS (\n  SELECT 1 FROM sonarqube_projects sp \n  WHERE LOWER(sp.project_key) = LOWER(r.org || '_' || r.slug)\n     OR LOWER(sp.project_key) = LOWER(r.slug)\n     OR LOWER(sp.project_name) = LOWER(r.slug)\n     OR sp.project_key LIKE '%:' || r.slug\n     OR sp.project_key LIKE r.org || '_%_' || r.slug\n)\nORDER BY r.org, r.slug;",
           "refId": "A"
         }
       ],
@@ -1124,6 +1124,6 @@
   "timezone": "",
   "title": "SonarQube - Engineering Manager View",
   "uid": "sonarqube-metrics",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

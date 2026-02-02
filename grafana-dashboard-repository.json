@@ -1162,6 +1162,160 @@
       "fieldConfig": {
         "defaults": {
           "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "yellow",
+                "value": 85
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 10
+      },
+      "id": 27,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ROUND(\n    100.0 * COUNT(CASE WHEN state = 'MERGED' THEN 1 END) /\n    NULLIF(COUNT(CASE WHEN state IN ('MERGED', 'CLOSED') THEN 1 END), 0),\n    1\n  ) as \"Merge Rate\"\nFROM prs\nWHERE repository_name = '$repository'\n  AND (merged_at >= $__timeFrom()::timestamp AND merged_at <= $__timeTo()::timestamp\n       OR closed_at >= $__timeFrom()::timestamp AND closed_at <= $__timeTo()::timestamp)",
+          "refId": "A"
+        }
+      ],
+      "title": "Merge Rate",
+      "description": "Percentage of PRs that were merged vs closed/abandoned. Higher is better",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "orange",
+                "value": 15
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 10
+      },
+      "id": 28,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ROUND(\n    100.0 * COUNT(CASE WHEN state = 'CLOSED' THEN 1 END) /\n    NULLIF(COUNT(CASE WHEN state IN ('MERGED', 'CLOSED') THEN 1 END), 0),\n    1\n  ) as \"Abandonment Rate\"\nFROM prs\nWHERE repository_name = '$repository'\n  AND (merged_at >= $__timeFrom()::timestamp AND merged_at <= $__timeTo()::timestamp\n       OR closed_at >= $__timeFrom()::timestamp AND closed_at <= $__timeTo()::timestamp)",
+          "refId": "A"
+        }
+      ],
+      "title": "PR Abandonment Rate",
+      "description": "Percentage of PRs that were closed without merging. Lower is better. High rates may indicate unclear requirements or process issues",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
             "mode": "palette-classic"
           },
           "custom": {

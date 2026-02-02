@@ -385,6 +385,343 @@
           "color": {
             "mode": "thresholds"
           },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "id": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  SUM(pr.additions - COALESCE(pr.generated_additions, 0)) as \"Human Lines Added\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Human Lines Added",
+      "description": "Lines of code added by humans (excluding auto-generated code like protobufs, mocks, vendor)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 22
+      },
+      "id": 101,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  DATE_TRUNC('day', pr.created_at) as time,\n  SUM(COALESCE(pr.generated_additions, 0)) as \"Generated Lines\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nGROUP BY time\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Generated Lines",
+      "description": "Auto-generated lines of code (protobufs, mocks, vendor, etc.) that don't require manual review",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 22
+      },
+      "id": 102,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  NOW() as time,\n  CASE \n    WHEN SUM(pr.additions) > 0 \n    THEN ROUND(100.0 * SUM(pr.additions - COALESCE(pr.generated_additions, 0)) / SUM(pr.additions), 1)\n    ELSE 100\n  END as \"Human Code %\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
+          "refId": "A"
+        }
+      ],
+      "title": "Human Code %",
+      "description": "Percentage of code that is human-written vs auto-generated. Higher is better for measuring actual developer productivity",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 22
+      },
+      "id": 103,
+      "options": {
+        "displayLabels": ["percent"],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true,
+          "values": []
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  'Human' as type,\n  SUM(pr.additions - COALESCE(pr.generated_additions, 0)) as lines\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nUNION ALL\nSELECT\n  'Generated' as type,\n  SUM(COALESCE(pr.generated_additions, 0)) as lines\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
+          "refId": "A"
+        }
+      ],
+      "title": "Code Composition",
+      "description": "Breakdown of human-written vs auto-generated code",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "orange",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 22
+      },
+      "id": 104,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  NOW() as time,\n  COUNT(*) as \"PRs with Incomplete File Data\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.files_complete = false\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
+          "refId": "A"
+        }
+      ],
+      "title": "Large PRs (Incomplete)",
+      "description": "PRs with 500+ files where file-level tracking was skipped. These may have inaccurate generated code metrics",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 1,
           "mappings": [],
           "thresholds": {
@@ -606,12 +943,12 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  NOW() as time,\n  AVG(pr.additions + pr.deletions) as \"Average PR Size (lines)\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
+          "rawSql": "SELECT\n  NOW() as time,\n  AVG((pr.additions - COALESCE(pr.generated_additions, 0)) + (pr.deletions - COALESCE(pr.generated_deletions, 0))) as \"Average PR Size (lines)\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp",
           "refId": "A"
         }
       ],
-      "title": "Avg PR Size",
-      "description": "Average lines changed per PR (additions + deletions). Smaller PRs (<200 lines) are easier to review and less risky",
+      "title": "Avg PR Size (Human)",
+      "description": "Average human-written lines changed per PR (excluding generated code). Smaller PRs (<200 lines) are easier to review and less risky",
       "type": "stat"
     },
     {
@@ -1154,6 +1491,83 @@
       ],
       "title": "Avg Time to Close",
       "description": "Average time from PR creation to close (for PRs closed without merging). Shorter times indicate faster decisions on abandoned PRs.",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "orange",
+                "value": 15
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 10
+      },
+      "id": 80,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ROUND(\n    100.0 * COUNT(CASE WHEN state = 'CLOSED' THEN 1 END) /\n    NULLIF(COUNT(CASE WHEN state IN ('MERGED', 'CLOSED') THEN 1 END), 0),\n    1\n  ) as \"Abandonment Rate\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND (pr.merged_at >= $__timeFrom()::timestamp AND pr.merged_at <= $__timeTo()::timestamp\n       OR pr.closed_at >= $__timeFrom()::timestamp AND pr.closed_at <= $__timeTo()::timestamp)",
+          "refId": "A"
+        }
+      ],
+      "title": "PR Abandonment Rate",
+      "description": "Percentage of PRs that were closed without merging. Lower is better. High rates may indicate unclear requirements or process issues",
       "type": "stat"
     },
     {
@@ -1783,7 +2197,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 19
       },
       "id": 2,
       "options": {
@@ -1926,7 +2340,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 30
       },
       "id": 5,
       "options": {
@@ -2074,7 +2488,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 38
       },
       "id": 4,
       "options": {
@@ -2096,7 +2510,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  pr.title as \"PR Title\",\n  pr.author as \"Author\",\n  pr.repository_name as \"Repository\",\n  pr.state as \"State\",\n  pr.additions as \"Additions\",\n  pr.deletions as \"Deletions\",\n  (pr.additions + pr.deletions) as \"Total Changes\",\n  CASE\n    WHEN (pr.additions + pr.deletions) <= 100 THEN 'Small'\n    WHEN (pr.additions + pr.deletions) <= 500 THEN 'Medium'\n    ELSE 'Large'\n  END as \"PR Size\",\n  pr.created_at as \"Created At\",\n  pr.merged_at as \"Merged At\",\n  CASE\n    WHEN pr.merged_at IS NOT NULL THEN\n      CASE\n        WHEN EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) < 60 THEN\n          ROUND(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))) || ' seconds'\n        WHEN EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) < 3600 THEN\n          FLOOR(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) / 60) || ' minutes ' ||\n          ROUND(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) % 60) || ' seconds'\n        WHEN EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) < 86400 THEN\n          FLOOR(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) / 3600) || ' hours ' ||\n          FLOOR((EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) % 3600) / 60) || ' minutes'\n        ELSE\n          FLOOR(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) / 86400) || ' days ' ||\n          FLOOR((EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) % 86400) / 3600) || ' hours'\n      END\n    ELSE NULL\n  END as \"Lead Time\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nORDER BY pr.created_at DESC\nLIMIT 100",
+          "rawSql": "SELECT\n  pr.title as \"PR Title\",\n  pr.author as \"Author\",\n  pr.repository_name as \"Repository\",\n  pr.state as \"State\",\n  pr.additions as \"Additions\",\n  pr.deletions as \"Deletions\",\n  (pr.additions + pr.deletions) as \"Total Changes\",\n  CASE\n    WHEN (pr.additions + pr.deletions) <= 100 THEN 'Small'\n    WHEN (pr.additions + pr.deletions) <= 500 THEN 'Medium'\n    ELSE 'Large'\n  END as \"PR Size\",\n  pr.created_at as \"Created At\",\n  pr.merged_at as \"Merged At\",\n  CASE\n    WHEN pr.merged_at IS NOT NULL THEN\n      CASE\n        WHEN EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) < 60 THEN\n          ROUND(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))) || ' seconds'\n        WHEN EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) < 3600 THEN\n          FLOOR(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) / 60) || ' minutes ' ||\n          ROUND(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) % 60) || ' seconds'\n        WHEN EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) < 86400 THEN\n          FLOOR(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) / 3600) || ' hours ' ||\n          FLOOR((EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) % 3600) / 60) || ' minutes'\n        ELSE\n          FLOOR(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) / 86400) || ' days ' ||\n          FLOOR((EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at)) % 86400) / 3600) || ' hours'\n      END\n    ELSE NULL\n  END as \"Lead Time\"\nFROM prs pr\nJOIN teams t ON pr.author = t.member\nWHERE t.team = '$team'\n  AND pr.author IN ($included_members)\n  AND pr.created_at >= $__timeFrom()::timestamp\n  AND pr.created_at <= $__timeTo()::timestamp\nORDER BY pr.created_at DESC\nLIMIT 100",
           "refId": "A",
           "sql": {
             "columns": [
@@ -2177,7 +2591,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 50
       },
       "id": 13,
       "options": {
@@ -2289,7 +2703,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 58
       },
       "id": 26,
       "options": {
@@ -2343,7 +2757,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 61
+        "y": 66
       },
       "id": 27,
       "options": {
@@ -2414,7 +2828,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 61
+        "y": 66
       },
       "id": 28,
       "options": {
@@ -2467,7 +2881,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 71
+        "y": 76
       },
       "id": 60,
       "panels": [],
@@ -2581,7 +2995,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 72
+        "y": 77
       },
       "id": 61,
       "options": {
@@ -2624,7 +3038,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 82
+        "y": 87
       },
       "id": 70,
       "panels": [],
@@ -2670,7 +3084,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 83
+        "y": 88
       },
       "id": 71,
       "options": {
@@ -2742,7 +3156,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 83
+        "y": 88
       },
       "id": 76,
       "options": {
@@ -2814,7 +3228,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 83
+        "y": 88
       },
       "id": 72,
       "options": {
@@ -2888,7 +3302,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 83
+        "y": 88
       },
       "id": 73,
       "options": {
@@ -2960,7 +3374,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 83
+        "y": 88
       },
       "id": 74,
       "options": {
@@ -3091,7 +3505,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 87
+        "y": 92
       },
       "id": 75,
       "options": {
