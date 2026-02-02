@@ -127,15 +127,23 @@ func (c *RESTClient) waitForRateLimit(ctx context.Context, logger *slog.Logger) 
 
 	// Wait until reset time
 	waitDuration := time.Until(resetTime)
-	if waitDuration > 0 && waitDuration < 15*time.Minute {
-		logger.Warn("Rate limit low, waiting for reset",
-			"remaining", remaining,
-			"reset_in_seconds", waitDuration.Seconds())
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(waitDuration + time.Second): // Add 1 second buffer
-		}
+	if waitDuration <= 0 {
+		return
+	}
+
+	// Cap maximum wait at 1 hour
+	maxWait := 60 * time.Minute
+	if waitDuration > maxWait {
+		waitDuration = maxWait
+	}
+
+	logger.Warn("Rate limit low, waiting for reset",
+		"remaining", remaining,
+		"reset_in_seconds", waitDuration.Seconds())
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(waitDuration + time.Second): // Add 1 second buffer
 	}
 }
 
@@ -178,27 +186,39 @@ func (c *RESTClient) fetchFilesPage(ctx context.Context, url string, maxRetries 
 			resetTime := c.parseRateLimitReset(resp.Header.Get("X-RateLimit-Reset"))
 			remaining := resp.Header.Get("X-RateLimit-Remaining")
 
-			if resetTime > 0 {
-				waitDuration := time.Until(time.Unix(resetTime, 0))
-				if waitDuration > 0 && waitDuration < 15*time.Minute {
-					logger.Warn("Rate limited, waiting for reset",
-						"wait_seconds", waitDuration.Seconds(),
-						"remaining", remaining,
-						"reset_at", time.Unix(resetTime, 0).Format(time.RFC3339))
-					resp.Body.Close()
-					select {
-					case <-ctx.Done():
-						return nil, false, ctx.Err()
-					case <-time.After(waitDuration + time.Second): // Add 1 second buffer
-					}
-					// Reset retry counter after waiting for rate limit
-					attempt = 0
-					backoff = time.Second
-					continue
-				}
-			}
 			resp.Body.Close()
-			lastErr = fmt.Errorf("rate limited (status %d)", resp.StatusCode)
+
+			// Calculate wait duration
+			var waitDuration time.Duration
+			if resetTime > 0 {
+				waitDuration = time.Until(time.Unix(resetTime, 0))
+			}
+
+			// If we couldn't parse reset time or it's in the past, use a default wait
+			if waitDuration <= 0 {
+				waitDuration = 60 * time.Second // Default 1 minute wait
+			}
+
+			// Cap maximum wait at 1 hour to avoid infinite waits
+			maxWait := 60 * time.Minute
+			if waitDuration > maxWait {
+				waitDuration = maxWait
+			}
+
+			logger.Warn("Rate limited, waiting for reset",
+				"wait_seconds", waitDuration.Seconds(),
+				"remaining", remaining,
+				"reset_at", time.Unix(resetTime, 0).Format(time.RFC3339))
+
+			select {
+			case <-ctx.Done():
+				return nil, false, ctx.Err()
+			case <-time.After(waitDuration + time.Second): // Add 1 second buffer
+			}
+
+			// Reset retry counter after waiting for rate limit - don't count rate limit waits as retries
+			attempt = -1 // Will become 0 after increment
+			backoff = time.Second
 			continue
 		}
 
